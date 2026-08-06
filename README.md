@@ -2,7 +2,7 @@
 
 ## 简介
 
-这个 VScode 插件可以在 C++（.cpp & .hpp & .h）代码注释中渲染 Markdown 和 LaTeX/KaTeX。
+这个 VScode 插件可以在 C++ 文件代码注释中渲染 Markdown 和 LaTeX/KaTeX。
 
 目前 bug 比较多，正在持续开发中。
 
@@ -35,6 +35,7 @@ f(x) &= \int_0^x A^* (t) dt \\
 \end{aligned}
 $$
 */
+
 void demoBlockComment()
 {
 	// # 单行注释大标题

@@ -2,14 +2,26 @@
 	"name": "cpp-md",
 	"displayName": "Markdown in C++",
 	"description": "在 C++ 代码注释中渲染 Markdown 和 LaTeX/KaTeX",
-	"version": "1.4.5",
+	"version": "1.4.6",
 	"publisher": "Gary0",
 	"engines": {
 		"vscode": "^1.60.0"
 	},
 	"categories": ["Programming Languages", "Other"],
 	"main": "./dist/extension.js",
-	"activationEvents": ["onLanguage:cpp", "onLanguage:hpp", "onLanguage:h"],
+	"activationEvents": ["onLanguage:cpp", "onLanguage:hpp", "onLanguage:h", "onLanguage:cxx", "onLanguage:cc", "onLanguage:c"],
+	"contributes": {
+		"configuration": {
+			"title": "Markdown in C++",
+			"properties": {
+				"cpp-md.mathColor": {
+					"type": "string",
+					"default": "auto",
+					"description": "LaTeX 数学公式渲染颜色。默认为 auto（自动智能匹配当前主题注释色），若不准确可手动填写十六进制颜色代码。"
+				}
+			}
+		}
+	},
 	"dependencies": {
 		"mathjax-full": "^3.2.2"
 	},
