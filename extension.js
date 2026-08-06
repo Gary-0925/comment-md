@@ -1,30 +1,46 @@
 const vscode = require("vscode");
 
-// 1. 隐藏符号样式 (彻底透明且不占宽度)
+// 1. 隐藏符号黑科技：透明色 + 负字间距 (不破坏 VS Code 的行高和字体计算)
 const hideDecoration = vscode.window.createTextEditorDecorationType({
 	color: "transparent",
-	fontSize: "0px",
-	letterSpacing: "-1em",
+	letterSpacing: "-0.45em",
 });
 
-// 2. 多级标题样式（保持原生主题颜色）
+// 2. 多级标题 (采用相对比例放大，完美避开行高裁切)
 const h1Decoration = vscode.window.createTextEditorDecorationType({
-	fontSize: "18px",
+	fontSize: "1.35em",
 	fontWeight: "bold",
-	borderBottom: "1px solid rgba(128, 128, 128, 0.3)",
+	borderBottom: "1px solid rgba(128, 128, 128, 0.35)",
 });
 
 const h2Decoration = vscode.window.createTextEditorDecorationType({
-	fontSize: "16px",
+	fontSize: "1.2em",
 	fontWeight: "bold",
 });
 
 const h3Decoration = vscode.window.createTextEditorDecorationType({
-	fontSize: "14px",
+	fontSize: "1.1em",
 	fontWeight: "bold",
 });
 
-// 3. 粗体 & 斜体 & 删除线
+// 3. 引用块 (> quote)：使用 before 伪元素直接注入高亮竖线 ▌
+const quoteDecoration = vscode.window.createTextEditorDecorationType({
+	before: {
+		contentText: "▌ ",
+		color: "rgba(128, 128, 128, 0.65)",
+	},
+	fontStyle: "italic",
+});
+
+// 4. 分割线 (---)：使用 after 伪元素直接注入一条漂亮的整行横线
+const hrDecoration = vscode.window.createTextEditorDecorationType({
+	after: {
+		contentText: "──────────────────────────────────────────────────",
+		color: "rgba(128, 128, 128, 0.35)",
+	},
+});
+
+// 5. 粗体、斜体、删除线、列表、代码块
 const boldDecoration = vscode.window.createTextEditorDecorationType({
 	fontWeight: "bold",
 });
@@ -35,10 +51,9 @@ const italicDecoration = vscode.window.createTextEditorDecorationType({
 
 const strikethroughDecoration = vscode.window.createTextEditorDecorationType({
 	textDecoration: "line-through",
-	opacity: "0.65",
+	opacity: "0.6",
 });
 
-// 4. 代码块
 const codeDecoration = vscode.window.createTextEditorDecorationType({
 	backgroundColor: "rgba(255, 255, 255, 0.08)",
 	borderRadius: "3px",
@@ -46,20 +61,6 @@ const codeDecoration = vscode.window.createTextEditorDecorationType({
 	fontFamily: "monospace",
 });
 
-// 5. 引用块 (Blockquote)：左侧增加经典 Markdown 竖线
-const quoteDecoration = vscode.window.createTextEditorDecorationType({
-	borderLeft: "3px solid rgba(128, 128, 128, 0.5)",
-	paddingLeft: "6px",
-	fontStyle: "italic",
-});
-
-// 6. 水平分割线 (---)
-const hrDecoration = vscode.window.createTextEditorDecorationType({
-	borderBottom: "1px dashed rgba(128, 128, 128, 0.4)",
-	width: "100%",
-});
-
-// 7. 列表标记 (- 或 *)
 const listDecoration = vscode.window.createTextEditorDecorationType({
 	fontWeight: "bold",
 });
@@ -88,18 +89,18 @@ function activate(context) {
 			listRanges = [];
 		const hideRanges = [];
 
-		let inBlockComment = false; // 状态机：标记是否处于多行注释中
+		let inBlockComment = false;
 
 		for (let i = 0; i < doc.lineCount; i++) {
 			const line = doc.lineAt(i);
 			const text = line.text;
-			const isCurrentLine = i === activeLine; // 光标在当前行不隐藏符号
+			const isCurrentLine = i === activeLine; // 光标在当前行时不隐藏符号
 
 			let commentOffset = 0;
 			let commentContent = "";
 			let isCommentLine = false;
 
-			// --- 状态机：判断单行 / 多行注释 ---
+			// 解析单行 // 与多行 /* */ 注释
 			if (!inBlockComment) {
 				const singleMatch = text.match(/^(\s*\/\/\/?\s*)(.*)$/);
 				const blockStartMatch = text.match(/^(\s*\/\*+\s*)(.*)$/);
@@ -253,7 +254,7 @@ function activate(context) {
 			}
 		}
 
-		// 应用所有样式
+		// 应用样式
 		activeEditor.setDecorations(h1Decoration, h1Ranges);
 		activeEditor.setDecorations(h2Decoration, h2Ranges);
 		activeEditor.setDecorations(h3Decoration, h3Ranges);
