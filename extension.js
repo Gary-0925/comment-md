@@ -1,6 +1,6 @@
 const vscode = require("vscode");
 
-// --- 1. 初始化 MathJax 矢量引擎 ---
+// --- 1. 挂载 MathJax 全功能矢量渲染引擎 ---
 let texToSvg = null;
 try {
 	const { mathjax } = require("mathjax-full/js/mathjax.js");
@@ -15,22 +15,20 @@ try {
 
 	const htmlDoc = mathjax.document("", {
 		InputJax: new TeX({ packages: AllPackages }),
-		// fontCache: 'none' 将所有矢量字体线条直接嵌入 SVG，确保 100% 独立渲染
-		OutputJax: new SVG({ fontCache: "none" }),
+		OutputJax: new SVG({ fontCache: "none" }), // 将字体矢量路径直接写入 SVG
 	});
 
-	texToSvg = function (tex, isDisplay = false, color = "#E0E0E0") {
+	texToSvg = function (tex, isDisplay, color) {
 		const node = htmlDoc.convert(tex, { display: isDisplay });
 		let svgStr = adaptor.innerHTML(node);
-		// 将公式颜色替换为适配当前编辑器主题的颜色
 		svgStr = svgStr.replace(/currentColor/g, color);
 		return "data:image/svg+xml;utf8," + encodeURIComponent(svgStr);
 	};
 } catch (e) {
-	console.error("[cpp-md] MathJax 初始化失败:", e);
+	console.error("[cpp-md] MathJax 引擎加载失败:", e);
 }
 
-// 获取当前 VS Code 主题对应的公式颜色（亮色主题用黑色，暗色主题用亮灰）
+// 动态匹配 VS Code 编辑器日夜主题的公式颜色
 function getMathColor() {
 	const kind = vscode.window.activeColorTheme.kind;
 	if (kind === vscode.ColorThemeKind.Light || kind === vscode.ColorThemeKind.HighContrastLight) {
@@ -40,50 +38,58 @@ function getMathColor() {
 }
 
 // --- 2. 装饰器定义 ---
+
+// 隐藏符号 (精准负字间距，不干扰字号计算)
 const hideDecoration = vscode.window.createTextEditorDecorationType({
 	color: "transparent",
 	letterSpacing: "-0.5em",
 });
 
-// H1 使用 22px 绝对大字号 + 底部粗分割线
+// H1 标题：仅放大 1.35 倍 + 加粗，无背景，无下划线！
 const h1Decoration = vscode.window.createTextEditorDecorationType({
-	fontSize: "22px",
+	fontSize: "1.35em",
 	fontWeight: "bold",
-	borderBottom: "2px solid rgba(128, 128, 128, 0.4)",
 });
 
 const h2Decoration = vscode.window.createTextEditorDecorationType({
-	fontSize: "17px",
+	fontSize: "1.2em",
 	fontWeight: "bold",
 });
 
 const h3Decoration = vscode.window.createTextEditorDecorationType({
-	fontSize: "15px",
+	fontSize: "1.1em",
 	fontWeight: "bold",
 });
 
-// 引用块使用 ThemeColor 自动适应 C++ 注释主题色
+// 引用块：左侧灰线 + 缩进 + 斜体
 const quoteDecoration = vscode.window.createTextEditorDecorationType({
-	before: {
-		contentText: "▌ ",
-		color: new vscode.ThemeColor("comment"),
-	},
+	borderLeft: "3.5px solid rgba(128, 128, 128, 0.55)",
+	paddingLeft: "8px",
 	fontStyle: "italic",
 });
 
-// 矢量 SVG 虚线分割线
-const svgHr = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="4"><line x1="0" y1="2" x2="800" y2="2" stroke="gray" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.45"/></svg>';
+// 无序列表：前缀自动转换为圆点 (•)
+const listBulletDecoration = vscode.window.createTextEditorDecorationType({
+	before: {
+		contentText: "• ",
+		fontWeight: "bold",
+		color: "rgba(128, 128, 128, 0.85)",
+	},
+});
+
+// 矢量 SVG 分割线
+const svgHr = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="2"><line x1="0" y1="1" x2="600" y2="1" stroke="gray" stroke-width="1.2" stroke-dasharray="5 3" opacity="0.5"/></svg>';
 const hrDecoration = vscode.window.createTextEditorDecorationType({
 	after: {
 		contentIconPath: vscode.Uri.parse(svgHr),
-		margin: "0 0 0 10px",
+		margin: "0 0 0 8px",
+		verticalAlign: "middle",
 	},
 });
 
 const boldDecoration = vscode.window.createTextEditorDecorationType({ fontWeight: "bold" });
 const italicDecoration = vscode.window.createTextEditorDecorationType({ fontStyle: "italic" });
 const strikethroughDecoration = vscode.window.createTextEditorDecorationType({ textDecoration: "line-through", opacity: "0.6" });
-const listDecoration = vscode.window.createTextEditorDecorationType({ fontWeight: "bold" });
 const codeDecoration = vscode.window.createTextEditorDecorationType({
 	backgroundColor: "rgba(255, 255, 255, 0.08)",
 	borderRadius: "3px",
@@ -92,7 +98,8 @@ const codeDecoration = vscode.window.createTextEditorDecorationType({
 });
 
 function activate(context) {
-	let mathDecorations = [];
+	// MathJax SVG 句柄缓存池，彻底消除移动光标时的闪烁与卡顿
+	const mathCache = new Map();
 
 	function updateDecorations() {
 		const activeEditor = vscode.window.activeTextEditor;
@@ -104,10 +111,6 @@ function activate(context) {
 
 		const activeLine = activeEditor.selection.active.line;
 
-		// 清理上一次的数学公式句柄
-		mathDecorations.forEach((d) => d.dispose());
-		mathDecorations = [];
-
 		const h1Ranges = [],
 			h2Ranges = [],
 			h3Ranges = [];
@@ -117,7 +120,7 @@ function activate(context) {
 		const codeRanges = [],
 			quoteRanges = [],
 			hrRanges = [],
-			listRanges = [];
+			listBulletRanges = [];
 		const hideRanges = [];
 
 		let inBlockComment = false;
@@ -131,6 +134,7 @@ function activate(context) {
 			let commentContent = "";
 			let isCommentLine = false;
 
+			// 解析单行 // 与多行 /* */ 注释
 			if (!inBlockComment) {
 				const singleMatch = text.match(/^(\s*\/\/\/?\s*)(.*)$/);
 				const blockStartMatch = text.match(/^(\s*\/\*+\s*)(.*)$/);
@@ -188,20 +192,28 @@ function activate(context) {
 					if (!isCurrentLine) {
 						hideRanges.push(new vscode.Range(i, startIdx, i, endIdx));
 
-						try {
-							const isDisplay = fullMatch.startsWith("$$");
-							const svgUri = texToSvg(texExpr, isDisplay, getMathColor());
-							const mathDeco = vscode.window.createTextEditorDecorationType({
-								after: {
-									contentIconPath: vscode.Uri.parse(svgUri),
-									verticalAlign: "middle",
-									margin: "0 4px",
-								},
-							});
+						const isDisplay = fullMatch.startsWith("$$");
+						const cacheKey = texExpr + "_" + isDisplay + "_" + getMathColor();
+
+						if (!mathCache.has(cacheKey)) {
+							try {
+								const svgUri = texToSvg(texExpr, isDisplay, getMathColor());
+								const deco = vscode.window.createTextEditorDecorationType({
+									after: {
+										contentIconPath: vscode.Uri.parse(svgUri),
+										margin: "0 4px",
+										verticalAlign: "middle",
+									},
+								});
+								mathCache.set(cacheKey, deco);
+							} catch (e) {
+								console.error("[cpp-md] MathJax 渲染错误:", e);
+							}
+						}
+
+						const mathDeco = mathCache.get(cacheKey);
+						if (mathDeco) {
 							activeEditor.setDecorations(mathDeco, [new vscode.Range(i, endIdx, i, endIdx)]);
-							mathDecorations.push(mathDeco);
-						} catch (err) {
-							console.error("[cpp-md] MathJax 渲染公式出错:", err);
 						}
 					}
 				}
@@ -216,7 +228,7 @@ function activate(context) {
 				continue;
 			}
 
-			// --- C. 标题 ---
+			// --- C. 标题 (非重叠精准 Range) ---
 			const headerMatch = commentContent.match(/^(#+)\s+(.*)$/);
 			if (headerMatch) {
 				const hashLen = headerMatch[1].length;
@@ -240,16 +252,22 @@ function activate(context) {
 				const textStartIdx = commentOffset + quotePrefixLen;
 
 				quoteRanges.push(new vscode.Range(i, textStartIdx, i, text.length));
+
 				if (!isCurrentLine) {
 					hideRanges.push(new vscode.Range(i, commentOffset, i, textStartIdx));
 				}
 			}
 
-			// --- E. 列表 ---
-			const listMatch = commentContent.match(/^((?:[-*]|\d+\.)\s+)/);
+			// --- E. 无序列表 (- 或 *) ---
+			const listMatch = commentContent.match(/^([-*])\s+(.*)$/);
 			if (listMatch && !quoteMatch) {
-				const listPrefixLen = listMatch[1].length;
-				listRanges.push(new vscode.Range(i, commentOffset, i, commentOffset + listPrefixLen));
+				const prefixLen = 2;
+				const textStartIdx = commentOffset + prefixLen;
+
+				if (!isCurrentLine) {
+					hideRanges.push(new vscode.Range(i, commentOffset, i, textStartIdx));
+					listBulletRanges.push(new vscode.Range(i, textStartIdx, i, textStartIdx));
+				}
 			}
 
 			// --- F. 粗体/斜体/删除线/代码块 ---
@@ -319,7 +337,7 @@ function activate(context) {
 		activeEditor.setDecorations(codeDecoration, codeRanges);
 		activeEditor.setDecorations(quoteDecoration, quoteRanges);
 		activeEditor.setDecorations(hrDecoration, hrRanges);
-		activeEditor.setDecorations(listDecoration, listRanges);
+		activeEditor.setDecorations(listBulletDecoration, listBulletRanges);
 		activeEditor.setDecorations(hideDecoration, hideRanges);
 	}
 

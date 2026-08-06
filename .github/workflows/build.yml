@@ -18,12 +18,14 @@ jobs:
               with:
                   node-version: 24
 
-            - name: 在云端安装 MathJax 渲染引擎
+            - name: 加载 MathJax
               run: npm install --production
 
+            - name: 压缩依赖
+              run: npx esbuild extension.js --bundle --platform=node --target=node18 --external:vscode --outfile=dist/extension.js
+
             - name: 打包插件
-              run: |
-                  npx @vscode/vsce package -o cpp-md.vsix
+              run: npx @vscode/vsce package --no-dependencies -o cpp-md.vsix
 
             - name: 上传插件
               uses: actions/upload-artifact@v4
