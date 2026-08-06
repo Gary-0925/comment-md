@@ -1,16 +1,16 @@
 const vscode = require("vscode");
 
-// 1. 隐藏符号黑科技：透明色 + 负字间距 (不破坏 VS Code 的行高和字体计算)
+// 1. 隐藏符号黑科技：透明色 + 负字间距 (绝不干扰 VS Code 行高和字体放大计算)
 const hideDecoration = vscode.window.createTextEditorDecorationType({
 	color: "transparent",
-	letterSpacing: "-0.45em",
+	letterSpacing: "-0.5em",
 });
 
-// 2. 多级标题 (采用相对比例放大，完美避开行高裁切)
+// 2. 标题样式：保持原生注释颜色，真正放大 1.4 倍 + 加粗 + 分割线
 const h1Decoration = vscode.window.createTextEditorDecorationType({
-	fontSize: "1.35em",
+	fontSize: "1.4em",
 	fontWeight: "bold",
-	borderBottom: "1px solid rgba(128, 128, 128, 0.35)",
+	borderBottom: "2px solid rgba(128, 128, 128, 0.35)",
 });
 
 const h2Decoration = vscode.window.createTextEditorDecorationType({
@@ -23,37 +23,29 @@ const h3Decoration = vscode.window.createTextEditorDecorationType({
 	fontWeight: "bold",
 });
 
-// 3. 引用块 (> quote)：使用 before 伪元素直接注入高亮竖线 ▌
+// 3. 引用块 (> quote)：竖线颜色 100% 动态跟随当前主题的注释颜色 (ThemeColor)
 const quoteDecoration = vscode.window.createTextEditorDecorationType({
 	before: {
 		contentText: "▌ ",
-		color: "rgba(128, 128, 128, 0.65)",
+		color: new vscode.ThemeColor("comment"), // 原生注释调色盘
 	},
 	fontStyle: "italic",
 });
 
-// 4. 分割线 (---)：使用 after 伪元素直接注入一条漂亮的整行横线
+// 4. 水平分割线 (---)：采用 100% 矢量 SVG 画布，平滑高级
+const svgHr = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="4"><line x1="0" y1="2" x2="800" y2="2" stroke="gray" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.45"/></svg>';
 const hrDecoration = vscode.window.createTextEditorDecorationType({
 	after: {
-		contentText: "──────────────────────────────────────────────────",
-		color: "rgba(128, 128, 128, 0.35)",
+		contentIconPath: vscode.Uri.parse(svgHr),
+		margin: "0 0 0 10px",
 	},
 });
 
 // 5. 粗体、斜体、删除线、列表、代码块
-const boldDecoration = vscode.window.createTextEditorDecorationType({
-	fontWeight: "bold",
-});
-
-const italicDecoration = vscode.window.createTextEditorDecorationType({
-	fontStyle: "italic",
-});
-
-const strikethroughDecoration = vscode.window.createTextEditorDecorationType({
-	textDecoration: "line-through",
-	opacity: "0.6",
-});
-
+const boldDecoration = vscode.window.createTextEditorDecorationType({ fontWeight: "bold" });
+const italicDecoration = vscode.window.createTextEditorDecorationType({ fontStyle: "italic" });
+const strikethroughDecoration = vscode.window.createTextEditorDecorationType({ textDecoration: "line-through", opacity: "0.6" });
+const listDecoration = vscode.window.createTextEditorDecorationType({ fontWeight: "bold" });
 const codeDecoration = vscode.window.createTextEditorDecorationType({
 	backgroundColor: "rgba(255, 255, 255, 0.08)",
 	borderRadius: "3px",
@@ -61,21 +53,74 @@ const codeDecoration = vscode.window.createTextEditorDecorationType({
 	fontFamily: "monospace",
 });
 
-const listDecoration = vscode.window.createTextEditorDecorationType({
-	fontWeight: "bold",
-});
+/**
+ * 轻量级 LaTeX 公式转 SVG 矢量渲染引擎
+ */
+function renderMathToSvg(tex) {
+	let cleanTex = tex.trim();
+
+	// 常用 LaTeX 符号转换映射
+	const symbols = {
+		"\\alpha": "α",
+		"\\beta": "β",
+		"\\gamma": "γ",
+		"\\delta": "δ",
+		"\\theta": "θ",
+		"\\pi": "π",
+		"\\infty": "∞",
+		"\\sum": "∑",
+		"\\int": "∫",
+		"\\times": "×",
+		"\\div": "÷",
+		"\\pm": "±",
+		"\\leq": "≤",
+		"\\geq": "≥",
+		"\\neq": "≠",
+		"\\approx": "≈",
+	};
+
+	for (const [key, val] of Object.entries(symbols)) {
+		cleanTex = cleanTex.replaceAll(key, val);
+	}
+
+	// 解析 \frac{a}{b} -> (a / b)
+	cleanTex = cleanTex.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, "($1 / $2)");
+	// 解析 \sqrt{x} -> √(x)
+	cleanTex = cleanTex.replace(/\\sqrt\{([^}]+)\}/g, "√($1)");
+	// 解析 x^{2} 或 x^2
+	cleanTex = cleanTex.replace(/\^{([^}]+)}/g, "^$1");
+	cleanTex = cleanTex.replace(/\_\{([^}]+)}/g, "_$1");
+
+	// 动态生成 SVG 矢量图，字体使用 serif 经典数学斜体
+	const svgWidth = Math.max(cleanTex.length * 9 + 10, 30);
+	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="18" viewBox="0 0 ${svgWidth} 18">
+        <text x="5" y="13" font-family="KaTeX_Main, Times New Roman, serif" font-style="italic" font-size="13" fill="gray">${escapeHtml(cleanTex)}</text>
+    </svg>`;
+
+	return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+}
+
+function escapeHtml(str) {
+	return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 function activate(context) {
+	// 动态存储 LaTeX 公式产生的装饰器句柄，防止内存泄漏
+	let mathDecorations = [];
+
 	function updateDecorations() {
 		const activeEditor = vscode.window.activeTextEditor;
 		if (!activeEditor) return;
 
 		const doc = activeEditor.document;
 		const langId = doc.languageId.toLowerCase();
-
 		if (!["cpp", "c", "hpp", "h", "cc", "cxx"].includes(langId)) return;
 
 		const activeLine = activeEditor.selection.active.line;
+
+		// 清理上一次渲染的 LaTeX 装饰器
+		mathDecorations.forEach((d) => d.dispose());
+		mathDecorations = [];
 
 		const h1Ranges = [],
 			h2Ranges = [],
@@ -94,13 +139,13 @@ function activate(context) {
 		for (let i = 0; i < doc.lineCount; i++) {
 			const line = doc.lineAt(i);
 			const text = line.text;
-			const isCurrentLine = i === activeLine; // 光标在当前行时不隐藏符号
+			const isCurrentLine = i === activeLine;
 
 			let commentOffset = 0;
 			let commentContent = "";
 			let isCommentLine = false;
 
-			// 解析单行 // 与多行 /* */ 注释
+			// 单行 // 与多行 /* */ 解析逻辑
 			if (!inBlockComment) {
 				const singleMatch = text.match(/^(\s*\/\/\/?\s*)(.*)$/);
 				const blockStartMatch = text.match(/^(\s*\/\*+\s*)(.*)$/);
@@ -143,7 +188,36 @@ function activate(context) {
 
 			if (!isCommentLine || !commentContent) continue;
 
-			// --- A. 水平分割线 (--- 或 ***) ---
+			// --- A. LaTeX 数学公式 ($...$ 或 $$...$$) ---
+			const mathRegex = /(\$\$|\$)(.*?)\1/g;
+			let mm;
+			while ((mm = mathRegex.exec(commentContent)) !== null) {
+				const fullMatch = mm[0];
+				const texExpr = mm[2];
+				if (!texExpr.trim()) continue;
+
+				const startIdx = commentOffset + mm.index;
+				const endIdx = startIdx + fullMatch.length;
+
+				if (!isCurrentLine) {
+					// 隐藏原生的 $tex$ 文本
+					hideRanges.push(new vscode.Range(i, startIdx, i, endIdx));
+
+					// 渲染为 SVG 公式图像挂载在行内
+					const svgUri = renderMathToSvg(texExpr);
+					const mathDeco = vscode.window.createTextEditorDecorationType({
+						after: {
+							contentIconPath: vscode.Uri.parse(svgUri),
+							verticalAlign: "middle",
+							margin: "0 4px",
+						},
+					});
+					activeEditor.setDecorations(mathDeco, [new vscode.Range(i, endIdx, i, endIdx)]);
+					mathDecorations.push(mathDeco);
+				}
+			}
+
+			// --- B. 水平分割线 (--- 或 ***) ---
 			if (/^(---|[*]{3}|___)\s*$/.test(commentContent)) {
 				hrRanges.push(new vscode.Range(i, commentOffset, i, text.length));
 				if (!isCurrentLine) {
@@ -152,7 +226,7 @@ function activate(context) {
 				continue;
 			}
 
-			// --- B. 标题 (#, ##, ###) ---
+			// --- C. 标题 (#, ##, ###) ---
 			const headerMatch = commentContent.match(/^(#+)\s+(.*)$/);
 			if (headerMatch) {
 				const hashLen = headerMatch[1].length;
@@ -169,7 +243,7 @@ function activate(context) {
 				continue;
 			}
 
-			// --- C. 引用块 (> quote) ---
+			// --- D. 引用块 (> quote) ---
 			const quoteMatch = commentContent.match(/^(>\s*)(.*)$/);
 			if (quoteMatch) {
 				const quotePrefixLen = quoteMatch[1].length;
@@ -182,14 +256,14 @@ function activate(context) {
 				}
 			}
 
-			// --- D. 列表 (- 或 * 或 1.) ---
+			// --- E. 列表 (- 或 * 或 1.) ---
 			const listMatch = commentContent.match(/^((?:[-*]|\d+\.)\s+)/);
 			if (listMatch && !quoteMatch) {
 				const listPrefixLen = listMatch[1].length;
 				listRanges.push(new vscode.Range(i, commentOffset, i, commentOffset + listPrefixLen));
 			}
 
-			// --- E. 删除线 (~~text~~) ---
+			// --- F. 删除线 (~~text~~) ---
 			const strikeRegex = /~~(.*?)~~/g;
 			let stm;
 			while ((stm = strikeRegex.exec(commentContent)) !== null) {
@@ -205,7 +279,7 @@ function activate(context) {
 				}
 			}
 
-			// --- F. 粗体 (**text**) ---
+			// --- G. 粗体 (**text**) ---
 			const boldRegex = /\*\*(.*?)\*\*/g;
 			let bm;
 			while ((bm = boldRegex.exec(commentContent)) !== null) {
@@ -221,7 +295,7 @@ function activate(context) {
 				}
 			}
 
-			// --- G. 斜体 (*text*) ---
+			// --- H. 斜体 (*text*) ---
 			const italicRegex = /(?<!\*)\*([^*]+)\*(?!\*)/g;
 			let im;
 			while ((im = italicRegex.exec(commentContent)) !== null) {
@@ -237,7 +311,7 @@ function activate(context) {
 				}
 			}
 
-			// --- H. 行内代码 (`code`) ---
+			// --- I. 行内代码 (`code`) ---
 			const codeRegex = /`(.*?)`/g;
 			let cm;
 			while ((cm = codeRegex.exec(commentContent)) !== null) {
@@ -254,7 +328,7 @@ function activate(context) {
 			}
 		}
 
-		// 应用样式
+		// 应用各类样式
 		activeEditor.setDecorations(h1Decoration, h1Ranges);
 		activeEditor.setDecorations(h2Decoration, h2Ranges);
 		activeEditor.setDecorations(h3Decoration, h3Ranges);

@@ -2,7 +2,7 @@
 
 ## 简介
 
-这个 VScode 插件可以在 C++（.cpp & .hpp & .h）代码注释中渲染 Markdown。
+这个 VScode 插件可以在 C++（.cpp & .hpp & .h）代码注释中渲染 Markdown 和 LaTeX/KaTeX。
 
 ## 示例
 

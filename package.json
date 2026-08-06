@@ -1,8 +1,8 @@
 {
 	"name": "cpp-md",
 	"displayName": "Markdown in C++",
-	"description": "在 C++ 代码注释中渲染 Markdown",
-	"version": "1.1.1",
+	"description": "在 C++ 代码注释中渲染 Markdown 和 LaTeX/KaTeX",
+	"version": "1.2.0",
 	"publisher": "my-developer",
 	"engines": {
 		"vscode": "^1.60.0"
