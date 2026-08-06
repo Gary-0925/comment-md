@@ -1,0 +1,29 @@
+name: Build Extension Package
+
+on:
+    push:
+        branches: ["main", "master"]
+    workflow_dispatch:
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: 检出源码
+              uses: actions/checkout@v4
+
+            - name: 配置 Node.js 环境 (云端)
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+
+            - name: 云端打包插件为 .vsix 文件
+              run: |
+                  npx @vscode/vsce package --no-dependencies -o cpp-md.vsix
+
+            - name: 上传 .vsix 到 GitHub Actions 产物区
+              uses: actions/upload-artifact@v4
+              with:
+                  name: cpp-md-installer
+                  path: cpp-md.vsix
