@@ -18,7 +18,7 @@ try {
 		OutputJax: new SVG({ fontCache: "none" }),
 	});
 
-	// 解析 MathJax SVG viewBox，换算准确的 em 相对单位，确保 1:1 随编辑器字号 Zoom 缩放
+	// 解析 MathJax SVG viewBox，换算准确的 em 相对单位，保证 1:1 随编辑器字号 Zoom 缩放
 	texToSvg = function (tex, isDisplay, color) {
 		const node = htmlDoc.convert(tex, { display: isDisplay });
 		let svgStr = adaptor.innerHTML(node);
@@ -43,6 +43,12 @@ try {
 		if (vaMatch) {
 			va = vaMatch[1];
 		}
+
+		// 让 SVG 内部自适应 100%，由外部 em 容器控制 1:1 代码缩放
+		svgStr = svgStr.replace(/<svg[^>]*>/, (match) => {
+			let clean = match.replace(/\s*(width|height|style)=["'][^"']*["']/g, "");
+			return clean.replace(">", ' width="100%" height="100%">');
+		});
 
 		let hEm, wEm;
 		if (isDisplay) {
@@ -81,6 +87,7 @@ const hrDecoration = vscode.window.createTextEditorDecorationType({
 	isWholeLine: true,
 	borderBottom: "1px solid rgba(128, 128, 128, 0.45)",
 	color: "transparent",
+	letterSpacing: "-0.42em",
 });
 
 // 多行代码块整行背框
@@ -306,7 +313,7 @@ function activate(context) {
 				}
 			}
 
-			// C. 纯粹的单趟最左匹配递归 AST 解析器 (无索引错位 BUG)
+			// C. 纯粹无 Bug 的单趟最左匹配递归 AST 解析器
 			function parseInline(contentStr, startCol, currentStyles) {
 				if (!contentStr) return;
 
@@ -403,7 +410,7 @@ function activate(context) {
 				candidates.sort((a, b) => a.index - b.index);
 				const best = candidates[0];
 
-				// A) 处理匹配项前面的普通文本
+				// 处理匹配项前面的普通文本
 				if (best.index > 0) {
 					const prefixRange = new vscode.Range(i, startCol, i, startCol + best.index);
 					applyFormatting(prefixRange, currentStyles);
@@ -435,22 +442,22 @@ function activate(context) {
 						}
 					}
 				} else if (best.type === "code") {
-					const innerStart = matchStartCol + best.delimLen;
-					const innerEnd = matchEndCol - best.delimLen;
-					codeRanges.push(new vscode.Range(i, innerStart, i, innerEnd));
+					const innerStartCol = matchStartCol + best.delimLen;
+					const innerEndCol = matchEndCol - best.delimLen;
+					codeRanges.push(new vscode.Range(i, innerStartCol, i, innerEndCol));
 
 					if (!isCurrentLine) {
-						hideSyntaxRanges.push(new vscode.Range(i, matchStartCol, i, innerStart));
-						hideSyntaxRanges.push(new vscode.Range(i, innerEnd, i, matchEndCol));
+						hideSyntaxRanges.push(new vscode.Range(i, matchStartCol, i, innerStartCol));
+						hideSyntaxRanges.push(new vscode.Range(i, innerEndCol, i, matchEndCol));
 					}
 				} else {
 					// 粗体/斜体/粗斜体/删除线：隐藏开闭符号，并递归解析内部嵌套
-					const innerStart = matchStartCol + best.delimLen;
-					const innerEnd = matchEndCol - best.delimLen;
+					const innerStartCol = matchStartCol + best.delimLen;
+					const innerEndCol = matchEndCol - best.delimLen;
 
 					if (!isCurrentLine) {
-						hideSyntaxRanges.push(new vscode.Range(i, matchStartCol, i, innerStart));
-						hideSyntaxRanges.push(new vscode.Range(i, innerEnd, i, matchEndCol));
+						hideSyntaxRanges.push(new vscode.Range(i, matchStartCol, i, innerStartCol));
+						hideSyntaxRanges.push(new vscode.Range(i, innerEndCol, i, matchEndCol));
 					}
 
 					const nextStyles = {
@@ -459,14 +466,15 @@ function activate(context) {
 						strike: currentStyles.strike || best.type === "strike",
 					};
 
-					parseInline(best.inner, innerStart, nextStyles);
+					parseInline(best.inner, innerStartCol, nextStyles);
 				}
 
-				// B) 递归处理匹配项后面的剩余文本
+				// 递归处理匹配项后面的剩余文本
 				const afterStartInStr = best.index + best.fullLen;
 				if (afterStartInStr < contentStr.length) {
-					const afterStr = contentStr.substring(afterStartStartInStr || afterStartInStr);
-					parseInline(afterStr, matchEndCol, currentStyles);
+					const afterStr = contentStr.substring(afterStartInStr);
+					const afterStartCol = startCol + afterStartInStr;
+					parseInline(afterStr, afterStartCol, currentStyles);
 				}
 			}
 
