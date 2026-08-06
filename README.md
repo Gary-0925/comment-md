@@ -1,14 +1,18 @@
-# Markdown in C++
+# Markdown in Comments
 
 ## 简介
 
-这个 VScode 插件可以在 C++ 文件代码注释中渲染 Markdown 和 LaTeX/KaTeX。
+这个 VScode 插件可以在代码注释中渲染 Markdown 和 LaTeX/KaTeX。
 
-目前 bug 比较多，正在持续开发中。
+目前支持 C++、C、C#、Python、Java、Rust、Go、JS、PHP、TS、Kotlin、Swift 等编程语言
+
+可以在设置中调整对每种语言是否启用。
+
+由 Gemini-3.6-flash 辅助编写，目前 Bug 比较多，正在持续开发中。
 
 ## 示例
 
-您可以在安装扩展后将以下代码复制到 .cpp 文件中以查看渲染效果。
+您可以在安装扩展后将以下代码保存为 .cpp 文件中以查看渲染效果。
 
 ```cpp
 #include <iostream>

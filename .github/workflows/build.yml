@@ -25,10 +25,10 @@ jobs:
               run: npx esbuild extension.js --bundle --platform=node --target=node18 --external:vscode --outfile=dist/extension.js
 
             - name: 打包插件
-              run: npx @vscode/vsce package --no-dependencies -o cpp-md.vsix
+              run: npx @vscode/vsce package --no-dependencies -o comment-md.vsix
 
             - name: 上传插件
               uses: actions/upload-artifact@v4
               with:
-                  name: cpp-md
-                  path: cpp-md.vsix
+                  name: comment-md
+                  path: comment-md.vsix
