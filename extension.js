@@ -54,7 +54,7 @@ function getMathColor() {
 
 // --- 2. 装饰器定义 ---
 
-// 公式专用隐藏样式 (保留基线，不破坏默认行高)
+// 公式专用隐藏样式 (透明 + 压缩字间距)
 const hideMathDecoration = vscode.window.createTextEditorDecorationType({
 	color: "transparent",
 	letterSpacing: "-0.42em",
@@ -71,7 +71,7 @@ const h1Decoration = vscode.window.createTextEditorDecorationType({ fontSize: "1
 const h2Decoration = vscode.window.createTextEditorDecorationType({ fontSize: "1.2em", fontWeight: "bold" });
 const h3Decoration = vscode.window.createTextEditorDecorationType({ fontSize: "1.1em", fontWeight: "bold" });
 
-// 引用块：UTF-8 字符 ▌ 100% 稳定显示
+// 引用块：UTF-8 字符 ▌ 100% 稳定高亮显示
 const quoteDecoration = vscode.window.createTextEditorDecorationType({
 	before: {
 		contentText: "▌ ",
@@ -81,7 +81,7 @@ const quoteDecoration = vscode.window.createTextEditorDecorationType({
 	fontStyle: "italic",
 });
 
-// 【彻底修复】：实线分割线 (已移除 stroke-dasharray，为纯粹实线)
+// 实线分割线
 const svgHr = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="500" height="2"><line x1="0" y1="1" x2="500" y2="1" stroke="%23888888" stroke-width="1.2" opacity="0.45"/></svg>';
 const hrDecoration = vscode.window.createTextEditorDecorationType({
 	color: "transparent",
@@ -127,7 +127,7 @@ function activate(context) {
 
 		const activeLine = activeEditor.selection.active.line;
 
-		// 销毁上一帧的所有公式句柄
+		// 彻底销毁上一帧的所有公式句柄，解决右侧公式堆叠 BUG
 		activeMathDecorations.forEach((d) => d.dispose());
 		activeMathDecorations = [];
 
@@ -144,7 +144,10 @@ function activate(context) {
 		const hideSyntaxRanges = [],
 			hideMathRanges = [];
 
-		// --- STEP 1: 文档级多行跨行公式 ($$ ... $$) ---
+		// 存储多行公式屏蔽的行号集合
+		const multilineMathLines = new Set();
+
+		// --- STEP 1: 全局优先抓取多行公式 ($$ ... $$)，建立数学禁飞区 ---
 		if (texToSvg) {
 			const fullText = doc.getText();
 			const multilineMathRegex = /\$\$([\s\S]+?)\$\$/g;
@@ -157,6 +160,11 @@ function activate(context) {
 				const startPos = doc.positionAt(match.index);
 				const endPos = doc.positionAt(match.index + match[0].length);
 
+				// 标记多行公式跨越的所有行，禁止任何 Markdown 语法介入
+				for (let l = startPos.line; l <= endPos.line; l++) {
+					multilineMathLines.add(l);
+				}
+
 				const isCursorInFormula = activeLine >= startPos.line && activeLine <= endPos.line;
 
 				if (!isCursorInFormula) {
@@ -164,20 +172,20 @@ function activate(context) {
 
 					try {
 						const res = texToSvg(rawTex, true, getMathColor());
-						// 使用 em 单位计算相对高度，跟随代码缩放，且垂直居中绝不错位
-						const targetHeightEm = Math.max(1.6, res.height / 700);
+						const targetHeightEm = Math.max(1.6, res.height / 650);
 						const targetWidthEm = (targetHeightEm * res.ratio).toFixed(2);
 
+						// 【关键修复】：多行公式 SVG 挂载点精准修正到首行 startPos，顶部对齐！
 						const mathDeco = vscode.window.createTextEditorDecorationType({
-							after: {
+							before: {
 								contentIconPath: vscode.Uri.parse(res.uri),
 								width: `${targetWidthEm}em`,
 								height: `${targetHeightEm.toFixed(2)}em`,
 								margin: "4px 0",
-								verticalAlign: "middle",
+								verticalAlign: "top",
 							},
 						});
-						activeEditor.setDecorations(mathDeco, [new vscode.Range(endPos, endPos)]);
+						activeEditor.setDecorations(mathDeco, [new vscode.Range(startPos, startPos)]);
 						activeMathDecorations.push(mathDeco);
 					} catch (e) {
 						console.error("[cpp-md] 多行 MathJax 渲染错误:", e);
@@ -186,10 +194,13 @@ function activate(context) {
 			}
 		}
 
-		// --- STEP 2: 逐行遮罩隔离解析 ---
+		// --- STEP 2: 逐行解析注释并做单行公式遮罩 ---
 		let inBlockComment = false;
 
 		for (let i = 0; i < doc.lineCount; i++) {
+			// 如果该行属于多行公式内部，100% 跳过所有 Markdown 解析！
+			if (multilineMathLines.has(i)) continue;
+
 			const line = doc.lineAt(i);
 			const text = line.text;
 			const isCurrentLine = i === activeLine;
@@ -233,7 +244,7 @@ function activate(context) {
 
 			if (!isCommentLine || !commentContent) continue;
 
-			// 优先提取行内公式并进行“字符遮罩” (Masking)
+			// 优先提取行内公式并用空格填充遮罩，保护公式内的 *、_、- 字符
 			const mathSpans = [];
 			let maskedComment = commentContent;
 
@@ -260,20 +271,21 @@ function activate(context) {
 							const isDisplay = fullMatch.startsWith("$$");
 							const res = texToSvg(texExpr, isDisplay, getMathColor());
 
-							// 【核心修复】：行内公式高度锁死在 1.25em 范围内，绝不撑大行高挤压文本！
-							const targetHeightEm = 1.25;
+							const targetHeightEm = 1.22;
 							const targetWidthEm = (targetHeightEm * res.ratio).toFixed(2);
 
+							// 【关键修复】：行内公式挂载点精确定位到 startIdx (公式头部)，垂直基线对齐！
+							const startPos = new vscode.Position(i, startIdx);
 							const mathDeco = vscode.window.createTextEditorDecorationType({
-								after: {
+								before: {
 									contentIconPath: vscode.Uri.parse(res.uri),
 									width: `${targetWidthEm}em`,
 									height: `${targetHeightEm}em`,
-									margin: "0 3px",
-									verticalAlign: "-0.25em", // 精准基线垂直居中
+									margin: "0 2px",
+									verticalAlign: "-0.22em", // 精准基线对齐
 								},
 							});
-							activeEditor.setDecorations(mathDeco, [new vscode.Range(i, endIdx, i, endIdx)]);
+							activeEditor.setDecorations(mathDeco, [new vscode.Range(startPos, startPos)]);
 							activeMathDecorations.push(mathDeco);
 						} catch (e) {
 							console.error("[cpp-md] 行内 MathJax 渲染错误:", e);
@@ -281,7 +293,7 @@ function activate(context) {
 					}
 				}
 
-				// 遮罩公式区间
+				// 将单行公式区间替换为空格遮罩，阻止后续 Markdown 正则介入
 				for (const m of mathSpans) {
 					const maskStr = " ".repeat(m.endInContent - m.startInContent);
 					maskedComment = maskedComment.substring(0, m.startInContent) + maskStr + maskedComment.substring(m.endInContent);
@@ -357,7 +369,7 @@ function activate(context) {
 				maskedComment = maskedComment.substring(0, cm.index) + maskStr + maskedComment.substring(cm.index + cm[0].length);
 			}
 
-			// --- F. 递归语法解析器 (处理嵌套粗/斜/删除线) ---
+			// --- F. 递归语法解析器 (在已遮罩公式的文本上安全解析粗/斜/删除线) ---
 			function parseInlineFormatting(str, strOffset, currentStyles) {
 				if (!str) return;
 
