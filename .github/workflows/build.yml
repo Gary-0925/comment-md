@@ -18,6 +18,9 @@ jobs:
               with:
                   node-version: 24
 
+            - name: 在云端安装 MathJax 渲染引擎
+              run: npm install --production
+
             - name: 打包插件
               run: |
                   npx @vscode/vsce package --no-dependencies -o cpp-md.vsix
