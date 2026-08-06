@@ -1,6 +1,6 @@
 const vscode = require("vscode");
 
-// --- 1. 挂载 MathJax 全功能矢量渲染引擎 ---
+// --- 1. MathJax 全功能矢量渲染引擎 ---
 let texToSvg = null;
 try {
 	const { mathjax } = require("mathjax-full/js/mathjax.js");
@@ -15,7 +15,7 @@ try {
 
 	const htmlDoc = mathjax.document("", {
 		InputJax: new TeX({ packages: AllPackages }),
-		OutputJax: new SVG({ fontCache: "none" }), // 将字体矢量路径直接写入 SVG
+		OutputJax: new SVG({ fontCache: "none" }),
 	});
 
 	texToSvg = function (tex, isDisplay, color) {
@@ -28,7 +28,6 @@ try {
 	console.error("[cpp-md] MathJax 引擎加载失败:", e);
 }
 
-// 动态匹配 VS Code 编辑器日夜主题的公式颜色
 function getMathColor() {
 	const kind = vscode.window.activeColorTheme.kind;
 	if (kind === vscode.ColorThemeKind.Light || kind === vscode.ColorThemeKind.HighContrastLight) {
@@ -39,33 +38,38 @@ function getMathColor() {
 
 // --- 2. 装饰器定义 ---
 
-// 隐藏符号 (精准负字间距，不干扰字号计算)
+// 基础隐藏样式
 const hideDecoration = vscode.window.createTextEditorDecorationType({
 	color: "transparent",
 	letterSpacing: "-0.5em",
 });
 
-// H1 标题：仅放大 1.35 倍 + 加粗，无背景，无下划线！
-const h1Decoration = vscode.window.createTextEditorDecorationType({
-	fontSize: "1.35em",
-	fontWeight: "bold",
+// 【核心修复】：公式专用零宽度折叠样式（防止行内公式推挤上下文文本导致错位）
+const hideMathTextDecoration = vscode.window.createTextEditorDecorationType({
+	color: "transparent",
+	fontSize: "0px",
+	letterSpacing: "-1em",
 });
 
-const h2Decoration = vscode.window.createTextEditorDecorationType({
-	fontSize: "1.2em",
-	fontWeight: "bold",
-});
+// H1 标题：仅放大 1.35 倍 + 加粗 (干净纯粹，无背景，无下划线)
+const h1Decoration = vscode.window.createTextEditorDecorationType({ fontSize: "1.35em", fontWeight: "bold" });
+const h2Decoration = vscode.window.createTextEditorDecorationType({ fontSize: "1.2em", fontWeight: "bold" });
+const h3Decoration = vscode.window.createTextEditorDecorationType({ fontSize: "1.1em", fontWeight: "bold" });
 
-const h3Decoration = vscode.window.createTextEditorDecorationType({
-	fontSize: "1.1em",
-	fontWeight: "bold",
-});
-
-// 引用块：左侧灰线 + 缩进 + 斜体
+// 引用块：100% 稳定显示的灰线
 const quoteDecoration = vscode.window.createTextEditorDecorationType({
-	borderLeft: "3.5px solid rgba(128, 128, 128, 0.55)",
-	paddingLeft: "8px",
+	before: {
+		contentText: " ",
+		borderLeft: "3.5px solid rgba(128, 128, 128, 0.65)",
+		margin: "0 6px 0 0",
+	},
 	fontStyle: "italic",
+});
+
+// 分割线 (---)：原生整行虚线，绝不出横向滚动条
+const hrDecoration = vscode.window.createTextEditorDecorationType({
+	borderBottom: "1px dashed rgba(128, 128, 128, 0.45)",
+	isWholeLine: true,
 });
 
 // 无序列表：前缀自动转换为圆点 (•)
@@ -77,19 +81,10 @@ const listBulletDecoration = vscode.window.createTextEditorDecorationType({
 	},
 });
 
-// 矢量 SVG 分割线
-const svgHr = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="2"><line x1="0" y1="1" x2="600" y2="1" stroke="gray" stroke-width="1.2" stroke-dasharray="5 3" opacity="0.5"/></svg>';
-const hrDecoration = vscode.window.createTextEditorDecorationType({
-	after: {
-		contentIconPath: vscode.Uri.parse(svgHr),
-		margin: "0 0 0 8px",
-		verticalAlign: "middle",
-	},
-});
-
+// 原子级文本样式
 const boldDecoration = vscode.window.createTextEditorDecorationType({ fontWeight: "bold" });
 const italicDecoration = vscode.window.createTextEditorDecorationType({ fontStyle: "italic" });
-const strikethroughDecoration = vscode.window.createTextEditorDecorationType({ textDecoration: "line-through", opacity: "0.6" });
+const strikethroughDecoration = vscode.window.createTextEditorDecorationType({ textDecoration: "line-through", opacity: "0.65" });
 const codeDecoration = vscode.window.createTextEditorDecorationType({
 	backgroundColor: "rgba(255, 255, 255, 0.08)",
 	borderRadius: "3px",
@@ -97,10 +92,10 @@ const codeDecoration = vscode.window.createTextEditorDecorationType({
 	fontFamily: "monospace",
 });
 
-function activate(context) {
-	// MathJax SVG 句柄缓存池，彻底消除移动光标时的闪烁与卡顿
-	const mathCache = new Map();
+// 全局句柄，每次刷新彻底销毁旧的公式，防止在右侧重复堆叠
+let activeMathDecorations = [];
 
+function activate(context) {
 	function updateDecorations() {
 		const activeEditor = vscode.window.activeTextEditor;
 		if (!activeEditor) return;
@@ -110,6 +105,10 @@ function activate(context) {
 		if (!["cpp", "c", "hpp", "h", "cc", "cxx"].includes(langId)) return;
 
 		const activeLine = activeEditor.selection.active.line;
+
+		// 彻底清理销毁上一帧的所有公式句柄
+		activeMathDecorations.forEach((d) => d.dispose());
+		activeMathDecorations = [];
 
 		const h1Ranges = [],
 			h2Ranges = [],
@@ -122,7 +121,9 @@ function activate(context) {
 			hrRanges = [],
 			listBulletRanges = [];
 		const hideRanges = [];
+		const hideMathRanges = [];
 
+		// 遍历提取注释块
 		let inBlockComment = false;
 
 		for (let i = 0; i < doc.lineCount; i++) {
@@ -134,7 +135,6 @@ function activate(context) {
 			let commentContent = "";
 			let isCommentLine = false;
 
-			// 解析单行 // 与多行 /* */ 注释
 			if (!inBlockComment) {
 				const singleMatch = text.match(/^(\s*\/\/\/?\s*)(.*)$/);
 				const blockStartMatch = text.match(/^(\s*\/\*+\s*)(.*)$/);
@@ -156,15 +156,8 @@ function activate(context) {
 				}
 			} else {
 				isCommentLine = true;
-				const blockInnerMatch = text.match(/^(\s*\*+\/?\s*)(.*)$/);
-				if (blockInnerMatch) {
-					commentOffset = blockInnerMatch[1].length;
-					commentContent = blockInnerMatch[2];
-				} else {
-					const indentMatch = text.match(/^(\s*)(.*)$/);
-					commentOffset = indentMatch[1].length;
-					commentContent = indentMatch[2];
-				}
+				commentOffset = text.search(/\S|$/);
+				commentContent = text.trim();
 
 				if (text.includes("*/")) {
 					inBlockComment = false;
@@ -177,7 +170,7 @@ function activate(context) {
 
 			if (!isCommentLine || !commentContent) continue;
 
-			// --- A. MathJax 数学公式 ($...$ 或 $$...$$) ---
+			// --- A. 单行 MathJax 公式 ($...$ 或 $$...$$) ---
 			if (texToSvg) {
 				const mathRegex = /(\$\$|\$)(.*?)\1/g;
 				let mm;
@@ -190,36 +183,29 @@ function activate(context) {
 					const endIdx = startIdx + fullMatch.length;
 
 					if (!isCurrentLine) {
-						hideRanges.push(new vscode.Range(i, startIdx, i, endIdx));
+						// 使用零宽度折叠样式隐藏原生的 $tex$ 源码
+						hideMathRanges.push(new vscode.Range(i, startIdx, i, endIdx));
 
-						const isDisplay = fullMatch.startsWith("$$");
-						const cacheKey = texExpr + "_" + isDisplay + "_" + getMathColor();
-
-						if (!mathCache.has(cacheKey)) {
-							try {
-								const svgUri = texToSvg(texExpr, isDisplay, getMathColor());
-								const deco = vscode.window.createTextEditorDecorationType({
-									after: {
-										contentIconPath: vscode.Uri.parse(svgUri),
-										margin: "0 4px",
-										verticalAlign: "middle",
-									},
-								});
-								mathCache.set(cacheKey, deco);
-							} catch (e) {
-								console.error("[cpp-md] MathJax 渲染错误:", e);
-							}
-						}
-
-						const mathDeco = mathCache.get(cacheKey);
-						if (mathDeco) {
+						try {
+							const isDisplay = fullMatch.startsWith("$$");
+							const svgUri = texToSvg(texExpr, isDisplay, getMathColor());
+							const mathDeco = vscode.window.createTextEditorDecorationType({
+								after: {
+									contentIconPath: vscode.Uri.parse(svgUri),
+									margin: "0 2px",
+									verticalAlign: "middle",
+								},
+							});
 							activeEditor.setDecorations(mathDeco, [new vscode.Range(i, endIdx, i, endIdx)]);
+							activeMathDecorations.push(mathDeco);
+						} catch (e) {
+							console.error("[cpp-md] MathJax 渲染错误:", e);
 						}
 					}
 				}
 			}
 
-			// --- B. 分割线 ---
+			// --- B. 分割线 (--- 或 ***) ---
 			if (/^(---|[*]{3}|___)\s*$/.test(commentContent)) {
 				hrRanges.push(new vscode.Range(i, commentOffset, i, text.length));
 				if (!isCurrentLine) {
@@ -228,7 +214,7 @@ function activate(context) {
 				continue;
 			}
 
-			// --- C. 标题 (非重叠精准 Range) ---
+			// --- C. 标题 (#, ##, ###) ---
 			const headerMatch = commentContent.match(/^(#+)\s+(.*)$/);
 			if (headerMatch) {
 				const hashLen = headerMatch[1].length;
@@ -245,7 +231,7 @@ function activate(context) {
 				continue;
 			}
 
-			// --- D. 引用 ---
+			// --- D. 引用 (> quote) ---
 			const quoteMatch = commentContent.match(/^(>\s*)(.*)$/);
 			if (quoteMatch) {
 				const quotePrefixLen = quoteMatch[1].length;
@@ -270,49 +256,7 @@ function activate(context) {
 				}
 			}
 
-			// --- F. 粗体/斜体/删除线/代码块 ---
-			const strikeRegex = /~~(.*?)~~/g;
-			let stm;
-			while ((stm = strikeRegex.exec(commentContent)) !== null) {
-				const startIdx = commentOffset + stm.index;
-				const innerStart = startIdx + 2;
-				const innerEnd = innerStart + stm[1].length;
-				const endIdx = startIdx + stm[0].length;
-				strikeRanges.push(new vscode.Range(i, innerStart, i, innerEnd));
-				if (!isCurrentLine) {
-					hideRanges.push(new vscode.Range(i, startIdx, i, innerStart));
-					hideRanges.push(new vscode.Range(i, innerEnd, i, endIdx));
-				}
-			}
-
-			const boldRegex = /\*\*(.*?)\*\*/g;
-			let bm;
-			while ((bm = boldRegex.exec(commentContent)) !== null) {
-				const startIdx = commentOffset + bm.index;
-				const innerStart = startIdx + 2;
-				const innerEnd = innerStart + bm[1].length;
-				const endIdx = startIdx + bm[0].length;
-				boldRanges.push(new vscode.Range(i, innerStart, i, innerEnd));
-				if (!isCurrentLine) {
-					hideRanges.push(new vscode.Range(i, startIdx, i, innerStart));
-					hideRanges.push(new vscode.Range(i, innerEnd, i, endIdx));
-				}
-			}
-
-			const italicRegex = /(?<!\*)\*([^*]+)\*(?!\*)/g;
-			let im;
-			while ((im = italicRegex.exec(commentContent)) !== null) {
-				const startIdx = commentOffset + im.index;
-				const innerStart = startIdx + 1;
-				const innerEnd = innerStart + im[1].length;
-				const endIdx = startIdx + im[0].length;
-				italicRanges.push(new vscode.Range(i, innerStart, i, innerEnd));
-				if (!isCurrentLine) {
-					hideRanges.push(new vscode.Range(i, startIdx, i, innerStart));
-					hideRanges.push(new vscode.Range(i, innerEnd, i, endIdx));
-				}
-			}
-
+			// --- F. 行内代码 (`code`) ---
 			const codeRegex = /`(.*?)`/g;
 			let cm;
 			while ((cm = codeRegex.exec(commentContent)) !== null) {
@@ -320,14 +264,124 @@ function activate(context) {
 				const innerStart = startIdx + 1;
 				const innerEnd = innerStart + cm[1].length;
 				const endIdx = startIdx + cm[0].length;
+
 				codeRanges.push(new vscode.Range(i, innerStart, i, innerEnd));
 				if (!isCurrentLine) {
 					hideRanges.push(new vscode.Range(i, startIdx, i, innerStart));
 					hideRanges.push(new vscode.Range(i, innerEnd, i, endIdx));
 				}
 			}
+
+			// --- G. 递归解析组合嵌套样式 ---
+			function parseInlineFormatting(str, strOffset, currentStyles) {
+				if (!str) return;
+
+				const candidates = [];
+
+				const strikeRegex = /~~([\s\S]+?)~~/g;
+				let m = strikeRegex.exec(str);
+				if (m) candidates.push({ index: m.index, fullLen: m[0].length, inner: m[1], delimLen: 2, type: "strike" });
+
+				const boldItalicRegex = /\*{3}([\s\S]+?)\*{3}/g;
+				m = boldItalicRegex.exec(str);
+				if (m) candidates.push({ index: m.index, fullLen: m[0].length, inner: m[1], delimLen: 3, type: "boldItalic" });
+
+				const boldRegex = /(?<!\*)\*{2}([^*][\s\S]*?)\*{2}(?!\*)/g;
+				m = boldRegex.exec(str);
+				if (m) candidates.push({ index: m.index, fullLen: m[0].length, inner: m[1], delimLen: 2, type: "bold" });
+
+				const italicRegex = /(?<!\*)\*([^*]+?)\*(?!\*)/g;
+				m = italicRegex.exec(str);
+				if (m) candidates.push({ index: m.index, fullLen: m[0].length, inner: m[1], delimLen: 1, type: "italic" });
+
+				if (candidates.length === 0) {
+					if (str.length > 0) {
+						const range = new vscode.Range(i, strOffset, i, strOffset + str.length);
+						if (currentStyles.bold) boldRanges.push(range);
+						if (currentStyles.italic) italicRanges.push(range);
+						if (currentStyles.strike) strikeRanges.push(range);
+					}
+					return;
+				}
+
+				candidates.sort((a, b) => a.index - b.index);
+				const best = candidates[0];
+
+				if (best.index > 0) {
+					const prefixText = str.substring(0, best.index);
+					const prefixRange = new vscode.Range(i, strOffset, i, strOffset + prefixText.length);
+					if (currentStyles.bold) boldRanges.push(prefixRange);
+					if (currentStyles.italic) italicRanges.push(prefixRange);
+					if (currentStyles.strike) strikeRanges.push(prefixRange);
+				}
+
+				const openStart = strOffset + best.index;
+				const openEnd = openStart + best.delimLen;
+				if (!isCurrentLine) {
+					hideRanges.push(new vscode.Range(i, openStart, i, openEnd));
+				}
+
+				const innerOffset = openEnd;
+				const nextStyles = {
+					bold: currentStyles.bold || best.type === "bold" || best.type === "boldItalic",
+					italic: currentStyles.italic || best.type === "italic" || best.type === "boldItalic",
+					strike: currentStyles.strike || best.type === "strike",
+				};
+				parseInlineFormatting(best.inner, innerOffset, nextStyles);
+
+				const closeStart = innerOffset + best.inner.length;
+				const closeEnd = closeStart + best.delimLen;
+				if (!isCurrentLine) {
+					hideRanges.push(new vscode.Range(i, closeStart, i, closeEnd));
+				}
+
+				const remainderStart = best.index + best.fullLen;
+				const remainderText = str.substring(remainderStart);
+				parseInlineFormatting(remainderText, strOffset + remainderStart, currentStyles);
+			}
+
+			parseInlineFormatting(commentContent, commentOffset, { bold: false, italic: false, strike: false });
 		}
 
+		// --- H. 全局多行跨行公式 ($$ ... $$) 解析引擎 ---
+		if (texToSvg) {
+			const fullText = doc.getText();
+			const multilineMathRegex = /\$\$([\s\S]+?)\$\$/g;
+			let match;
+
+			while ((match = multilineMathRegex.exec(fullText)) !== null) {
+				const rawTex = match[1].trim();
+				if (!rawTex) continue;
+
+				const startPos = doc.positionAt(match.index);
+				const endPos = doc.positionAt(match.index + match[0].length);
+
+				// 判断光标是否落在多行公式所在的任意一行中
+				const isCursorInFormula = activeLine >= startPos.line && activeLine <= endPos.line;
+
+				if (!isCursorInFormula) {
+					// 折叠多行源码
+					hideMathRanges.push(new vscode.Range(startPos, endPos));
+
+					try {
+						const svgUri = texToSvg(rawTex, true, getMathColor());
+						const mathDeco = vscode.window.createTextEditorDecorationType({
+							after: {
+								contentIconPath: vscode.Uri.parse(svgUri),
+								margin: "6px 0",
+								verticalAlign: "middle",
+							},
+						});
+						activeEditor.setDecorations(mathDeco, [new vscode.Range(endPos, endPos)]);
+						activeMathDecorations.push(mathDeco);
+					} catch (e) {
+						console.error("[cpp-md] 多行 MathJax 渲染错误:", e);
+					}
+				}
+			}
+		}
+
+		// 应用各类样式
 		activeEditor.setDecorations(h1Decoration, h1Ranges);
 		activeEditor.setDecorations(h2Decoration, h2Ranges);
 		activeEditor.setDecorations(h3Decoration, h3Ranges);
@@ -339,6 +393,7 @@ function activate(context) {
 		activeEditor.setDecorations(hrDecoration, hrRanges);
 		activeEditor.setDecorations(listBulletDecoration, listBulletRanges);
 		activeEditor.setDecorations(hideDecoration, hideRanges);
+		activeEditor.setDecorations(hideMathTextDecoration, hideMathRanges);
 	}
 
 	context.subscriptions.push(
