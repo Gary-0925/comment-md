@@ -23,7 +23,7 @@ jobs:
 
             - name: 打包插件
               run: |
-                  npx @vscode/vsce package --no-dependencies -o cpp-md.vsix
+                  npx @vscode/vsce package -o cpp-md.vsix
 
             - name: 上传插件
               uses: actions/upload-artifact@v4
