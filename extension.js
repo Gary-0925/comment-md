@@ -18,11 +18,27 @@ try {
 		OutputJax: new SVG({ fontCache: "none" }),
 	});
 
+	// 解析 SVG viewBox 获得准确宽高比，确保矢量缩放不失真
+	function getSvgDimensions(svgStr) {
+		const vbMatch = svgStr.match(/viewBox=["']([^"']+)["']/);
+		if (vbMatch) {
+			const parts = vbMatch[1].trim().split(/\s+/).map(Number);
+			if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+				return { w: parts[2], h: parts[3], ratio: parts[2] / parts[3] };
+			}
+		}
+		return { w: 1000, h: 1000, ratio: 1.0 };
+	}
+
 	texToSvg = function (tex, isDisplay, color) {
 		const node = htmlDoc.convert(tex, { display: isDisplay });
 		let svgStr = adaptor.innerHTML(node);
 		svgStr = svgStr.replace(/currentColor/g, color);
-		return "data:image/svg+xml;utf8," + encodeURIComponent(svgStr);
+
+		const dim = getSvgDimensions(svgStr);
+		const uri = "data:image/svg+xml;utf8," + encodeURIComponent(svgStr);
+
+		return { uri, width: dim.w, height: dim.h, ratio: dim.ratio };
 	};
 } catch (e) {
 	console.error("[cpp-md] MathJax 引擎加载失败:", e);
@@ -38,7 +54,7 @@ function getMathColor() {
 
 // --- 2. 装饰器定义 ---
 
-// 公式专用隐藏样式 (保留行高，不破坏垂直基线)
+// 公式专用隐藏样式 (保留基线，不破坏默认行高)
 const hideMathDecoration = vscode.window.createTextEditorDecorationType({
 	color: "transparent",
 	letterSpacing: "-0.42em",
@@ -50,12 +66,12 @@ const hideSyntaxDecoration = vscode.window.createTextEditorDecorationType({
 	letterSpacing: "-0.42em",
 });
 
-// H1 标题：放大 1.35 倍 + 加粗 (纯净，无背景，无下划线)
+// H1 标题：放大 1.35 倍 + 加粗 (干净纯粹，无背景，无下划线)
 const h1Decoration = vscode.window.createTextEditorDecorationType({ fontSize: "1.35em", fontWeight: "bold" });
 const h2Decoration = vscode.window.createTextEditorDecorationType({ fontSize: "1.2em", fontWeight: "bold" });
 const h3Decoration = vscode.window.createTextEditorDecorationType({ fontSize: "1.1em", fontWeight: "bold" });
 
-// 【100% 显形修复】：引用块使用 UTF-8 字符 ▌，彻底避免 CSS border 被压缩毁坏的 BUG
+// 引用块：UTF-8 字符 ▌ 100% 稳定显示
 const quoteDecoration = vscode.window.createTextEditorDecorationType({
 	before: {
 		contentText: "▌ ",
@@ -65,8 +81,8 @@ const quoteDecoration = vscode.window.createTextEditorDecorationType({
 	fontStyle: "italic",
 });
 
-// 【100% 显形修复】：分割线自包含隐藏逻辑，绝不与 hideSyntaxRanges 重叠冲突
-const svgHr = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="500" height="2"><line x1="0" y1="1" x2="500" y2="1" stroke="%23888888" stroke-width="1.2" stroke-dasharray="6 4" opacity="0.5"/></svg>';
+// 【彻底修复】：实线分割线 (已移除 stroke-dasharray，为纯粹实线)
+const svgHr = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="500" height="2"><line x1="0" y1="1" x2="500" y2="1" stroke="%23888888" stroke-width="1.2" opacity="0.45"/></svg>';
 const hrDecoration = vscode.window.createTextEditorDecorationType({
 	color: "transparent",
 	letterSpacing: "-0.42em",
@@ -128,7 +144,7 @@ function activate(context) {
 		const hideSyntaxRanges = [],
 			hideMathRanges = [];
 
-		// --- STEP 1: 文档级全局多行跨行公式 ($$ ... $$) ---
+		// --- STEP 1: 文档级多行跨行公式 ($$ ... $$) ---
 		if (texToSvg) {
 			const fullText = doc.getText();
 			const multilineMathRegex = /\$\$([\s\S]+?)\$\$/g;
@@ -147,11 +163,17 @@ function activate(context) {
 					hideMathRanges.push(new vscode.Range(startPos, endPos));
 
 					try {
-						const svgUri = texToSvg(rawTex, true, getMathColor());
+						const res = texToSvg(rawTex, true, getMathColor());
+						// 使用 em 单位计算相对高度，跟随代码缩放，且垂直居中绝不错位
+						const targetHeightEm = Math.max(1.6, res.height / 700);
+						const targetWidthEm = (targetHeightEm * res.ratio).toFixed(2);
+
 						const mathDeco = vscode.window.createTextEditorDecorationType({
 							after: {
-								contentIconPath: vscode.Uri.parse(svgUri),
-								margin: "6px 0",
+								contentIconPath: vscode.Uri.parse(res.uri),
+								width: `${targetWidthEm}em`,
+								height: `${targetHeightEm.toFixed(2)}em`,
+								margin: "4px 0",
 								verticalAlign: "middle",
 							},
 						});
@@ -236,12 +258,19 @@ function activate(context) {
 
 						try {
 							const isDisplay = fullMatch.startsWith("$$");
-							const svgUri = texToSvg(texExpr, isDisplay, getMathColor());
+							const res = texToSvg(texExpr, isDisplay, getMathColor());
+
+							// 【核心修复】：行内公式高度锁死在 1.25em 范围内，绝不撑大行高挤压文本！
+							const targetHeightEm = 1.25;
+							const targetWidthEm = (targetHeightEm * res.ratio).toFixed(2);
+
 							const mathDeco = vscode.window.createTextEditorDecorationType({
 								after: {
-									contentIconPath: vscode.Uri.parse(svgUri),
-									margin: "0 2px",
-									verticalAlign: "-0.2em", // 精准基线对齐
+									contentIconPath: vscode.Uri.parse(res.uri),
+									width: `${targetWidthEm}em`,
+									height: `${targetHeightEm}em`,
+									margin: "0 3px",
+									verticalAlign: "-0.25em", // 精准基线垂直居中
 								},
 							});
 							activeEditor.setDecorations(mathDeco, [new vscode.Range(i, endIdx, i, endIdx)]);
@@ -261,7 +290,6 @@ function activate(context) {
 
 			// --- A. 分割线 (--- 或 ***) ---
 			if (/^(---|[*]{3}|___)\s*$/.test(commentContent) && mathSpans.length === 0) {
-				// hrDecoration 自身包含了隐藏和渲染逻辑，不放入 hideSyntaxRanges
 				if (!isCurrentLine) {
 					hrRanges.push(new vscode.Range(i, commentOffset, i, text.length));
 				}
