@@ -1,8 +1,8 @@
-<p style="text-align: center;">
+<p align="center">
 	<img src="./icon.png" alt="icon" style="height: 100px; width: 100px;"></img>
 </p>
 
-<h1 style="text-align: center;">Markdown in Comments</h1>
+<h1 align="center">Markdown in Comments</h1>
 
 [![latest version](https://img.shields.io/github/v/release/Gary-0925/comment-md?sort=date&style=flat-square&label=latest%20version&color=%23aa99dd)](https://github.com/Gary-0925/comment-md/releases/latest)[![latest version](https://img.shields.io/github/release-date/Gary-0925/comment-md?style=flat-square&label=%20&color=%23aa99dd)](https://github.com/Gary-0925/comment-md/releases/latest)
 [![latest update](https://img.shields.io/github/last-commit/Gary-0925/comment-md?style=flat-square&label=latest%20update)](https://github.com/Gary-0925/comment-md/commit/main)
