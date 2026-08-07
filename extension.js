@@ -48,7 +48,7 @@ try {
 			wEm = Number((hEm * ratio).toFixed(2));
 			va = "top";
 		} else {
-			hEm = 1.05;
+			hEm = 0.9;
 			wEm = Number((hEm * ratio).toFixed(2));
 		}
 
