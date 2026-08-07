@@ -190,13 +190,8 @@ const hideMultilineMathDecoration = vscode.window.createTextEditorDecorationType
 const hideSyntaxDecoration = vscode.window.createTextEditorDecorationType({ color: "transparent", fontSize: "0px", letterSpacing: "-1em" });
 const mathDecorationType = vscode.window.createTextEditorDecorationType({});
 
-// 分割线装饰器：通过伪元素绘制实线横线
 const hrDecoration = vscode.window.createTextEditorDecorationType({
-	before: {
-		contentText: "",
-		borderBottom: "1px solid rgba(128, 128, 128, 0.45)",
-		width: "300em",
-	},
+	before: { contentText: "------------------------------", color: getCommentColor(), fontWeight: "bold" },
 });
 
 const codeBlockDecoration = vscode.window.createTextEditorDecorationType({
@@ -216,7 +211,7 @@ const quoteDecoration = vscode.window.createTextEditorDecorationType({
 });
 
 const listBulletDecoration = vscode.window.createTextEditorDecorationType({
-	before: { contentText: "• ", fontWeight: "bold", color: getCommentColor() },
+	before: { contentText: "• ", color: getCommentColor(), fontWeight: "bold" },
 });
 
 const boldDecoration = vscode.window.createTextEditorDecorationType({ fontWeight: "bold" });

@@ -2,7 +2,7 @@
 	"name": "comment-md",
 	"displayName": "Markdown in Comments",
 	"description": "在代码注释中渲染 Markdown & LaTeX",
-	"version": "2.0.0",
+	"version": "2.0.1",
 	"publisher": "Gary0",
 	"icon": "./icon.png",
 	"engines": {
