@@ -1,5 +1,5 @@
 {
-	"name": "comment-md",
+	"name": "md-in-comment",
 	"displayName": "Markdown in Comments",
 	"description": "在代码注释中渲染 Markdown & LaTeX",
 	"version": "2.0.2",
@@ -15,62 +15,62 @@
 		"configuration": {
 			"title": "Markdown in Comments",
 			"properties": {
-				"comment-md.mathColor": {
+				"md-in-comment.mathColor": {
 					"type": "string",
 					"default": "auto",
 					"description": "LaTeX 数学公式渲染颜色。默认为 auto（自动智能匹配当前主题注释色），若不准确可手动填写十六进制颜色代码。"
 				},
-				"comment-md.languages.cpp": {
+				"md-in-comment.languages.cpp": {
 					"type": "boolean",
 					"default": true,
 					"description": "是否在 C/C++ (cpp, c, h, hpp, cuda) 文件注释中启用 Markdown & LaTeX 渲染"
 				},
-				"comment-md.languages.python": {
+				"md-in-comment.languages.python": {
 					"type": "boolean",
 					"default": true,
 					"description": "是否在 Python (python) 文件注释/文档字符串中启用 Markdown & LaTeX 渲染"
 				},
-				"comment-md.languages.javascript": {
+				"md-in-comment.languages.javascript": {
 					"type": "boolean",
 					"default": true,
 					"description": "是否在 JavaScript (js, jsx) 文件注释中启用 Markdown & LaTeX 渲染"
 				},
-				"comment-md.languages.typescript": {
+				"md-in-comment.languages.typescript": {
 					"type": "boolean",
 					"default": true,
 					"description": "是否在 TypeScript (ts, tsx) 文件注释中启用 Markdown & LaTeX 渲染"
 				},
-				"comment-md.languages.java": {
+				"md-in-comment.languages.java": {
 					"type": "boolean",
 					"default": true,
 					"description": "是否在 Java (java) 文件注释中启用 Markdown & LaTeX 渲染"
 				},
-				"comment-md.languages.rust": {
+				"md-in-comment.languages.rust": {
 					"type": "boolean",
 					"default": true,
 					"description": "是否在 Rust (rs) 文件注释中启用 Markdown & LaTeX 渲染"
 				},
-				"comment-md.languages.go": {
+				"md-in-comment.languages.go": {
 					"type": "boolean",
 					"default": true,
 					"description": "是否在 Go (go) 文件注释中启用 Markdown & LaTeX 渲染"
 				},
-				"comment-md.languages.csharp": {
+				"md-in-comment.languages.csharp": {
 					"type": "boolean",
 					"default": true,
 					"description": "是否在 C# (cs) 文件注释中启用 Markdown & LaTeX 渲染"
 				},
-				"comment-md.languages.php": {
+				"md-in-comment.languages.php": {
 					"type": "boolean",
 					"default": true,
 					"description": "是否在 PHP (php) 文件注释中启用 Markdown & LaTeX 渲染"
 				},
-				"comment-md.languages.swift": {
+				"md-in-comment.languages.swift": {
 					"type": "boolean",
 					"default": true,
 					"description": "是否在 Swift (swift) 文件注释中启用 Markdown & LaTeX 渲染"
 				},
-				"comment-md.languages.kotlin": {
+				"md-in-comment.languages.kotlin": {
 					"type": "boolean",
 					"default": true,
 					"description": "是否在 Kotlin (kt) 文件注释中启用 Markdown & LaTeX 渲染"
@@ -86,11 +86,11 @@
 	},
 	"license": "GNU General Public License v3.0",
 	"bugs": {
-		"url": "https://github.com/Gary-0925/comment-md/issues"
+		"url": "https://github.com/Gary-0925/md-in-comment/issues"
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/Gary-0925/comment-md"
+		"url": "https://github.com/Gary-0925/md-in-comment"
 	},
-	"homepage": "https://github.com/Gary-0925/comment-md/blob/main/README.md"
+	"homepage": "https://github.com/Gary-0925/md-in-comment/blob/main/README.md"
 }

@@ -75,13 +75,13 @@ try {
 		return { uri, wEm, hEm, va };
 	};
 } catch (e) {
-	console.error("[comment-md] MathJax 引擎加载失败:", e);
+	console.error("[md-in-comment] MathJax 引擎加载失败:", e);
 }
 
 // 尝试获取公式渲染颜色
 function getCommentColor() {
 	try {
-		const config = vscode.workspace.getConfiguration("comment-md");
+		const config = vscode.workspace.getConfiguration("md-in-comment");
 		const customColor = config.get("mathColor");
 		if (customColor && customColor !== "auto" && customColor.trim() !== "") {
 			return customColor.trim();
@@ -177,7 +177,7 @@ function isLanguageEnabled(langId) {
 	if (!settingKey) return false;
 
 	try {
-		const config = vscode.workspace.getConfiguration("comment-md.languages");
+		const config = vscode.workspace.getConfiguration("md-in-comment.languages");
 		return config.get(settingKey, true);
 	} catch (e) {
 		return true;
@@ -513,7 +513,7 @@ function activate(context) {
 									},
 								});
 							} catch (e) {
-								console.error("[comment-md] 多行 MathJax 渲染错误:", e);
+								console.error("[md-in-comment] 多行 MathJax 渲染错误:", e);
 							}
 						}
 						mathBuffer = [];
@@ -769,7 +769,7 @@ function activate(context) {
 									},
 								});
 							} catch (e) {
-								console.error("[comment-md] MathJax 渲染错误:", e);
+								console.error("[md-in-comment] MathJax 渲染错误:", e);
 							}
 						}
 					} else if (best.type === "code") {
@@ -848,7 +848,7 @@ function activate(context) {
 		}),
 		vscode.window.onDidChangeTextEditorSelection(updateDecorations),
 		vscode.workspace.onDidChangeConfiguration((e) => {
-			if (e.affectsConfiguration("comment-md")) {
+			if (e.affectsConfiguration("md-in-comment")) {
 				updateDecorations();
 			}
 		}),

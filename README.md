@@ -4,9 +4,9 @@
 
 <h1 align="center">Markdown in Comments</h1>
 
-[![latest version](https://img.shields.io/github/v/release/Gary-0925/comment-md?sort=date&style=flat-square&label=latest%20version&color=%23aa99dd)](https://github.com/Gary-0925/comment-md/releases/latest)[![latest version](https://img.shields.io/github/release-date/Gary-0925/comment-md?style=flat-square&label=%20&color=%23aa99dd)](https://github.com/Gary-0925/comment-md/releases/latest)
-[![latest update](https://img.shields.io/github/last-commit/Gary-0925/comment-md?style=flat-square&label=latest%20update)](https://github.com/Gary-0925/comment-md/commit/main)
-[![license](https://img.shields.io/github/license/Gary-0925/comment-md.svg?style=flat-square)](https://github.com/Gary-0925/comment-md/blob/main/LICENSE)
+[![latest version](https://img.shields.io/github/v/release/Gary-0925/md-in-comment?sort=date&style=flat-square&label=latest%20version&color=%23aa99dd)](https://github.com/Gary-0925/md-in-comment/releases/latest)[![latest version](https://img.shields.io/github/release-date/Gary-0925/md-in-comment?style=flat-square&label=%20&color=%23aa99dd)](https://github.com/Gary-0925/md-in-comment/releases/latest)
+[![latest update](https://img.shields.io/github/last-commit/Gary-0925/md-in-comment?style=flat-square&label=latest%20update)](https://github.com/Gary-0925/md-in-comment/commit/main)
+[![license](https://img.shields.io/github/license/Gary-0925/md-in-comment.svg?style=flat-square)](https://github.com/Gary-0925/md-in-comment/blob/main/LICENSE)
 
 ## 简介
 
