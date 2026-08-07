@@ -195,7 +195,7 @@ const hrDecoration = vscode.window.createTextEditorDecorationType({
 	before: {
 		contentText: "",
 		borderBottom: "1px solid rgba(128, 128, 128, 0.45)",
-		width: "100%",
+		width: "300em",
 	},
 });
 

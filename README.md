@@ -1,5 +1,5 @@
 <p align="center">
-	<img src="./icon.png" alt="icon" style="height: 100px; width: 100px;"></img>
+	<img src="./icon.png" alt="icon" height="100px" width="100px"></img>
 </p>
 
 <h1 align="center">Markdown in Comments</h1>
@@ -10,11 +10,13 @@
 
 ## 简介
 
-这个 VScode 插件可以在代码注释中渲染 Markdown 和 LaTeX。
+这个 VScode 插件可以在代码注释中渲染 Markdown 和 LaTeX，支持部分 Markdown 语法和多行公式。
 
 目前支持 C++、C、C#、Python、Java、Rust、Go、JS、PHP、TS、Kotlin、Swift 等编程语言，可以在设置中调整对每种语言是否启用。
 
 由 Gemini-3.6-flash 辅助编写，目前 Bug 比较多，正在持续开发中。
+
+**这个插件不是 Markdown 编辑器，它的目的是营造更美观的注释，而不是把注释变成 Markdown 编辑器**
 
 ## 示例
 
@@ -35,7 +37,7 @@
 - 项目列表 1：支持 `int x = 100;` 内联代码
 - 项目列表 2：支持行内公式 $n^2$
 
-1. 由 AI 辅助编写
+1. 即时预览
 2. 支持多行公式
 
 $$
