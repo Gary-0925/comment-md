@@ -38,12 +38,12 @@ try {
 				const vbW = parts[2];
 				const vbH = parts[3];
 
-				// 还原自然比例
 				wEm = vbW / 1000;
 				hEm = vbH / 1000;
 			}
 		}
 
+		let va = "0ex";
 		if (isMultiLine) {
 			hEm = Number((lineCount * 1.25).toFixed(2));
 			wEm = Number((hEm * (wEm > 0 ? wEm / hEm : 1)).toFixed(2));
@@ -53,19 +53,16 @@ try {
 			hEm = Math.min(hEm, MAX_INLINE_LINE_HEIGHT);
 
 			if (wEm > 0 && hEm > 0) {
-				const ratio = wEm / hEm;
 				wEm = hEm * (wEm / hEm);
 			}
 			wEm = Number(wEm.toFixed(3));
 			hEm = Number(hEm.toFixed(3));
-		}
 
-		let va = "0ex";
-		const vaMatch = svgStr.match(/vertical-align:\s*([^;"]+)/);
-		if (vaMatch) {
-			va = vaMatch[1];
+			const vaMatch = svgStr.match(/vertical-align:\s*([^;"]+)/);
+			if (vaMatch) {
+				va = vaMatch[1];
+			}
 		}
-		if (isMultiLine) va = "top";
 
 		svgStr = svgStr.replace(/<svg[^>]*>/, (match) => {
 			let clean = match.replace(/\s*(width|height|style)=["'][^"']*["']/g, "");
@@ -189,13 +186,12 @@ function isLanguageEnabled(langId) {
 
 // 静态装饰器定义
 const hideMathDecoration = vscode.window.createTextEditorDecorationType({ color: "transparent", fontSize: "0px", letterSpacing: "-1em" });
+const hideMultilineMathDecoration = vscode.window.createTextEditorDecorationType({ color: "transparent" });
 const hideSyntaxDecoration = vscode.window.createTextEditorDecorationType({ color: "transparent", fontSize: "0px", letterSpacing: "-1em" });
 const mathDecorationType = vscode.window.createTextEditorDecorationType({});
 const hrDecoration = vscode.window.createTextEditorDecorationType({
 	isWholeLine: true,
 	borderBottom: "1px solid rgba(128, 128, 128, 0.4)",
-	color: "transparent",
-	fontSize: "0px",
 });
 const codeBlockDecoration = vscode.window.createTextEditorDecorationType({
 	backgroundColor: "rgba(255, 255, 255, 0.05)",
@@ -247,11 +243,12 @@ function activate(context) {
 		editor.setDecorations(listBulletDecoration, []);
 		editor.setDecorations(hideSyntaxDecoration, []);
 		editor.setDecorations(hideMathDecoration, []);
+		editor.setDecorations(hideMultilineMathDecoration, []);
 		editor.setDecorations(mathDecorationType, []);
 	}
 
 	/**
-	 * 辅助函数：剥离块级嵌套前缀（引用、列表等），取得净文本
+	 * 辅助函数：剥离块级嵌套前缀（引用、列表等），仅用于判定 $$ 所在的行是否为空白/仅有 $$
 	 */
 	function getCleanContent(str) {
 		let text = str;
@@ -303,7 +300,8 @@ function activate(context) {
 			hrRanges = [],
 			listBulletRanges = [];
 		const hideSyntaxRanges = [],
-			hideMathRanges = [];
+			hideMathRanges = [],
+			hideMultilineMathRanges = [];
 		const mathRenderOptions = [];
 
 		// --- STEP 1: 提取所有连续的“注释块 (Comment Block)” ---
@@ -421,12 +419,13 @@ function activate(context) {
 				// 1) 代码块内部
 				if (inFencedCode) {
 					protectedLines.add(lineIdx);
-					codeBlockRanges.push(new vscode.Range(lineIdx, 0, lineIdx, doc.lineAt(lineIdx).text.length));
 					if (cleanText.startsWith("```")) {
 						inFencedCode = false;
 						if (lineIdx !== activeLine) {
 							hideSyntaxRanges.push(new vscode.Range(lineIdx, item.offset, lineIdx, doc.lineAt(lineIdx).text.length));
 						}
+					} else {
+						codeBlockRanges.push(new vscode.Range(lineIdx, 0, lineIdx, doc.lineAt(lineIdx).text.length));
 					}
 					continue;
 				}
@@ -434,7 +433,6 @@ function activate(context) {
 				// 2) 多行公式内部
 				if (inDisplayMath) {
 					multilineMathLines.add(lineIdx);
-					// 严格判断：核心内容仅有 $$ 时结束
 					if (cleanText === "$$") {
 						inDisplayMath = false;
 						const mathEndLineIndex = lineIdx;
@@ -448,7 +446,7 @@ function activate(context) {
 						const isCursorInFormula = activeLine >= mathStartLineIndex && activeLine <= mathEndLineIndex;
 
 						if (!isCursorInFormula && rawTex && texToSvg) {
-							hideMathRanges.push(new vscode.Range(startPos, endPos));
+							hideMultilineMathRanges.push(new vscode.Range(startPos, endPos));
 							try {
 								const res = texToSvg(rawTex, true, lineCount, getCommentColor());
 								mathRenderOptions.push({
@@ -468,6 +466,7 @@ function activate(context) {
 						}
 						mathBuffer = [];
 					} else {
+						// 绝对不剥离原字符，直接原样推入
 						mathBuffer.push(item.content);
 					}
 					continue;
@@ -483,7 +482,7 @@ function activate(context) {
 					continue;
 				}
 
-				// 4) 检查开启多行公式 $$ (严格要求整行净文本仅有 $$)
+				// 4) 检查开启多行公式 $$ (仅当核心文本为 $$ 时开启)
 				if (cleanText === "$$") {
 					inDisplayMath = true;
 					multilineMathLines.add(lineIdx);
@@ -509,10 +508,15 @@ function activate(context) {
 				// A. 嵌套块语法提取 (例如: > > - # )
 				let isHR = false;
 				while (remText.length > 0) {
+					if (/^\s*\\([>#\-*+]|==)/.test(remText)) {
+						break;
+					}
+
 					// 1) 分割线
 					if (/^\s*(---|[*]{3}|___)\s*$/.test(remText)) {
 						if (!isCurrentLine) {
 							hrRanges.push(new vscode.Range(i, item.offset, i, doc.lineAt(i).text.length));
+							hideSyntaxRanges.push(new vscode.Range(i, item.offset, i, doc.lineAt(i).text.length));
 						}
 						isHR = true;
 						break;
@@ -522,9 +526,10 @@ function activate(context) {
 					const qMatch = remText.match(/^(\s*>\s*)/);
 					if (qMatch) {
 						const prefixLen = qMatch[1].length;
-						quoteRanges.push(new vscode.Range(i, curCol, i, item.offset + item.content.length));
 						if (!isCurrentLine) {
 							hideSyntaxRanges.push(new vscode.Range(i, curCol, i, curCol + prefixLen));
+							// 将竖线的渲染挂载点放在隐藏符号之后，保证多层嵌套时的物理渲染顺序正确
+							quoteRanges.push(new vscode.Range(i, curCol + prefixLen, i, item.offset + item.content.length));
 						}
 						curCol += prefixLen;
 						remText = remText.slice(prefixLen);
@@ -539,8 +544,8 @@ function activate(context) {
 						const isUnordered = /^[-*+]$/.test(markerText);
 
 						if (!isCurrentLine) {
+							hideSyntaxRanges.push(new vscode.Range(i, curCol, i, curCol + prefixLen));
 							if (isUnordered) {
-								hideSyntaxRanges.push(new vscode.Range(i, curCol, i, curCol + prefixLen));
 								listBulletRanges.push(new vscode.Range(i, curCol + prefixLen, i, curCol + prefixLen));
 							} else {
 								boldRanges.push(new vscode.Range(i, curCol, i, curCol + markerText.length));
@@ -558,14 +563,14 @@ function activate(context) {
 						const hashLen = hMatch[2].length;
 						const textRange = new vscode.Range(i, curCol + prefixLen, i, item.offset + item.content.length);
 
-						if (hashLen === 1) h1Ranges.push(textRange);
-						else if (hashLen === 2) h2Ranges.push(textRange);
-						else if (hashLen === 3) h3Ranges.push(textRange);
-						else if (hashLen === 4) h4Ranges.push(textRange);
-						else if (hashLen === 5) h5Ranges.push(textRange);
-						else if (hashLen === 6) h6Ranges.push(textRange);
-
 						if (!isCurrentLine) {
+							if (hashLen === 1) h1Ranges.push(textRange);
+							else if (hashLen === 2) h2Ranges.push(textRange);
+							else if (hashLen === 3) h3Ranges.push(textRange);
+							else if (hashLen === 4) h4Ranges.push(textRange);
+							else if (hashLen === 5) h5Ranges.push(textRange);
+							else if (hashLen === 6) h6Ranges.push(textRange);
+
 							hideSyntaxRanges.push(new vscode.Range(i, curCol, i, curCol + prefixLen));
 						}
 						curCol += prefixLen;
@@ -584,9 +589,21 @@ function activate(context) {
 
 					const candidates = [];
 
+					// 0) 转义字符解析 (\*, \~, \-, \`, \$, \#, \> 等)
+					const escapeRegex = /\\([*~`$\-\\>#_()\[\]{}])/;
+					const em = escapeRegex.exec(contentStr);
+					if (em) {
+						candidates.push({
+							type: "escape",
+							index: em.index,
+							fullLen: em[0].length,
+							escapedChar: em[1],
+						});
+					}
+
 					// 1) 行内公式
 					if (texToSvg) {
-						const mathRegex = /(\$\$|\$)(.+?)\1/;
+						const mathRegex = /(?<!\\)(\$\$|\$)(.+?)(?<!\\)\1/;
 						const mm = mathRegex.exec(contentStr);
 						if (mm && mm[2].trim()) {
 							candidates.push({
@@ -599,7 +616,7 @@ function activate(context) {
 					}
 
 					// 2) 行内代码
-					const codeRegex = /(`+)(.+?)\1/;
+					const codeRegex = /(?<!\\)(`+)(.+?)(?<!\\)\1/;
 					const cm = codeRegex.exec(contentStr);
 					if (cm) {
 						candidates.push({
@@ -612,7 +629,7 @@ function activate(context) {
 					}
 
 					// 3) 粗体斜体删除线
-					const boldItalicRegex = /\*{3}([\s\S]+?)\*{3}/;
+					const boldItalicRegex = /(?<!\\)\*{3}([\s\S]+?)(?<!\\)\*{3}/;
 					const bim = boldItalicRegex.exec(contentStr);
 					if (bim) {
 						candidates.push({
@@ -624,7 +641,7 @@ function activate(context) {
 						});
 					}
 
-					const boldRegex = /(?<!\*)\*{2}([^*][\s\S]*?)\*{2}(?!\*)/;
+					const boldRegex = /(?<!\\)\*{2}([^*][\s\S]*?)(?<!\\)\*{2}/;
 					const bm = boldRegex.exec(contentStr);
 					if (bm) {
 						candidates.push({
@@ -636,7 +653,7 @@ function activate(context) {
 						});
 					}
 
-					const italicRegex = /(?<!\*)\*([^*]+?)\*(?!\*)/;
+					const italicRegex = /(?<!\\)\*([^*]+?)(?<!\\)\*/;
 					const im = italicRegex.exec(contentStr);
 					if (im) {
 						candidates.push({
@@ -648,7 +665,7 @@ function activate(context) {
 						});
 					}
 
-					const strikeRegex = /~~([\s\S]+?)~~/;
+					const strikeRegex = /(?<!\\)~~([\s\S]+?)(?<!\\)~~/;
 					const sm = strikeRegex.exec(contentStr);
 					if (sm) {
 						candidates.push({
@@ -678,8 +695,13 @@ function activate(context) {
 					const matchStartCol = startCol + best.index;
 					const matchEndCol = matchStartCol + best.fullLen;
 
-					// 公式和代码均为原子节点，不递归内部
-					if (best.type === "math") {
+					if (best.type === "escape") {
+						if (!isCurrentLine) {
+							hideSyntaxRanges.push(new vscode.Range(i, matchStartCol, i, matchStartCol + 1));
+						}
+						const charRange = new vscode.Range(i, matchStartCol + 1, i, matchEndCol);
+						applyFormatting(charRange, currentStyles);
+					} else if (best.type === "math") {
 						if (!isCurrentLine && texToSvg) {
 							hideMathRanges.push(new vscode.Range(i, matchStartCol, i, matchEndCol));
 							try {
@@ -711,7 +733,6 @@ function activate(context) {
 							hideSyntaxRanges.push(new vscode.Range(i, innerEndCol, i, matchEndCol));
 						}
 					} else {
-						// 格式样式继续递归解析 inner
 						const innerStartCol = matchStartCol + best.delimLen;
 						const innerEndCol = matchEndCol - best.delimLen;
 
@@ -764,6 +785,7 @@ function activate(context) {
 		activeEditor.setDecorations(listBulletDecoration, listBulletRanges);
 		activeEditor.setDecorations(hideSyntaxDecoration, hideSyntaxRanges);
 		activeEditor.setDecorations(hideMathDecoration, hideMathRanges);
+		activeEditor.setDecorations(hideMultilineMathDecoration, hideMultilineMathRanges);
 		activeEditor.setDecorations(mathDecorationType, mathRenderOptions);
 	}
 
