@@ -189,14 +189,19 @@ const hideMathDecoration = vscode.window.createTextEditorDecorationType({ color:
 const hideMultilineMathDecoration = vscode.window.createTextEditorDecorationType({ color: "transparent" });
 const hideSyntaxDecoration = vscode.window.createTextEditorDecorationType({ color: "transparent", fontSize: "0px", letterSpacing: "-1em" });
 const mathDecorationType = vscode.window.createTextEditorDecorationType({});
+
+// 分割线装饰器：通过伪元素绘制实线横线
 const hrDecoration = vscode.window.createTextEditorDecorationType({
-	isWholeLine: true,
-	borderBottom: "1px solid rgba(128, 128, 128, 0.4)",
+	before: {
+		contentText: "",
+		borderBottom: "1px solid rgba(128, 128, 128, 0.45)",
+		width: "100%",
+	},
 });
+
 const codeBlockDecoration = vscode.window.createTextEditorDecorationType({
 	backgroundColor: "rgba(255, 255, 255, 0.05)",
 	isWholeLine: true,
-	fontFamily: "monospace",
 });
 
 const h1Decoration = vscode.window.createTextEditorDecorationType({ fontWeight: "bold", textDecoration: "underline" });
@@ -208,7 +213,6 @@ const h6Decoration = vscode.window.createTextEditorDecorationType({ fontWeight: 
 
 const quoteDecoration = vscode.window.createTextEditorDecorationType({
 	before: { contentText: "▌ ", color: getCommentColor(), fontWeight: "bold" },
-	fontStyle: "italic",
 });
 
 const listBulletDecoration = vscode.window.createTextEditorDecorationType({
@@ -223,6 +227,25 @@ const codeDecoration = vscode.window.createTextEditorDecorationType({
 	borderRadius: "3px",
 	border: "1px solid rgba(255, 255, 255, 0.15)",
 });
+
+/**
+ * 辅助函数：判断字符位置是否处于代码字符串字面量中
+ */
+function isInsideString(text, index) {
+	let inSingle = false,
+		inDouble = false,
+		inBacktick = false;
+	for (let i = 0; i < index; i++) {
+		const char = text[i];
+		const prev = i > 0 ? text[i - 1] : "";
+		if (prev !== "\\") {
+			if (char === "'" && !inDouble && !inBacktick) inSingle = !inSingle;
+			else if (char === '"' && !inSingle && !inBacktick) inDouble = !inDouble;
+			else if (char === "`" && !inSingle && !inDouble) inBacktick = !inBacktick;
+		}
+	}
+	return inSingle || inDouble || inBacktick;
+}
 
 function activate(context) {
 	function clearAllDecorations(editor) {
@@ -247,9 +270,6 @@ function activate(context) {
 		editor.setDecorations(mathDecorationType, []);
 	}
 
-	/**
-	 * 辅助函数：剥离块级嵌套前缀（引用、列表等），仅用于判定 $$ 所在的行是否为空白/仅有 $$
-	 */
 	function getCleanContent(str) {
 		let text = str;
 		while (true) {
@@ -304,7 +324,7 @@ function activate(context) {
 			hideMultilineMathRanges = [];
 		const mathRenderOptions = [];
 
-		// --- STEP 1: 提取所有连续的“注释块 (Comment Block)” ---
+		// --- STEP 1: 智能扫描并提取注释（支持行首注释与代码行尾注释） ---
 		const commentBlocks = [];
 		let currentBlock = [];
 		let inBlockComment = false;
@@ -318,25 +338,7 @@ function activate(context) {
 			let isCommentLine = false;
 
 			if (langId === "python") {
-				if (!inBlockComment) {
-					const singleMatch = text.match(/^(\s*#\s*)(.*)$/);
-					const docstringStartMatch = text.match(/^(\s*(?:"""|''')\s*)(.*)$/);
-
-					if (singleMatch) {
-						isCommentLine = true;
-						commentOffset = singleMatch[1].length;
-						commentContent = singleMatch[2];
-					} else if (docstringStartMatch) {
-						isCommentLine = true;
-						commentOffset = docstringStartMatch[1].length;
-						commentContent = docstringStartMatch[2];
-						inBlockComment = true;
-
-						if (commentContent.includes('"""') || commentContent.includes("'''")) {
-							inBlockComment = false;
-						}
-					}
-				} else {
+				if (inBlockComment) {
 					isCommentLine = true;
 					commentOffset = text.search(/\S|$/);
 					commentContent = text.trim();
@@ -344,28 +346,48 @@ function activate(context) {
 					if (text.includes('"""') || text.includes("'''")) {
 						inBlockComment = false;
 					}
-				}
-			} else {
-				if (!inBlockComment) {
-					const singleMatch = text.match(/^(\s*\/\/\/?\s*)(.*)$/);
-					const blockStartMatch = text.match(/^(\s*\/\*+\s*)(.*)$/);
+				} else {
+					let hashIdx = -1;
+					let docIdx = -1;
+					let docChar = "";
 
-					if (singleMatch) {
-						isCommentLine = true;
-						commentOffset = singleMatch[1].length;
-						commentContent = singleMatch[2];
-					} else if (blockStartMatch) {
-						isCommentLine = true;
-						commentOffset = blockStartMatch[1].length;
-						commentContent = blockStartMatch[2];
-						inBlockComment = true;
-
-						if (commentContent.includes("*/")) {
-							inBlockComment = false;
-							commentContent = commentContent.substring(0, commentContent.indexOf("*/"));
+					for (let col = 0; col < text.length; col++) {
+						if (isInsideString(text, col)) continue;
+						const sub = text.slice(col);
+						if (docIdx === -1 && (sub.startsWith('"""') || sub.startsWith("'''"))) {
+							docIdx = col;
+							docChar = sub.slice(0, 3);
+							break;
+						}
+						if (hashIdx === -1 && text[col] === "#") {
+							hashIdx = col;
+							break;
 						}
 					}
-				} else {
+
+					if (docIdx !== -1) {
+						isCommentLine = true;
+						const match = text.slice(docIdx).match(/^(?:"""|''')\s*/);
+						const prefixLen = match ? match[0].length : 3;
+						commentOffset = docIdx + prefixLen;
+						commentContent = text.slice(commentOffset);
+						inBlockComment = true;
+
+						if (commentContent.includes(docChar)) {
+							inBlockComment = false;
+							commentContent = commentContent.substring(0, commentContent.indexOf(docChar));
+						}
+					} else if (hashIdx !== -1) {
+						isCommentLine = true;
+						const match = text.slice(hashIdx).match(/^#\s*/);
+						const prefixLen = match ? match[0].length : 1;
+						commentOffset = hashIdx + prefixLen;
+						commentContent = text.slice(commentOffset);
+					}
+				}
+			} else {
+				// C 风格语言
+				if (inBlockComment) {
 					isCommentLine = true;
 					commentOffset = text.search(/\S|$/);
 					commentContent = text.trim();
@@ -375,6 +397,41 @@ function activate(context) {
 						const endIdx = commentContent.indexOf("*/");
 						if (endIdx !== -1) {
 							commentContent = commentContent.substring(0, endIdx);
+						}
+					}
+				} else {
+					let singleIdx = -1;
+					let blockIdx = -1;
+
+					for (let col = 0; col < text.length - 1; col++) {
+						if (isInsideString(text, col)) continue;
+						if (text[col] === "/" && text[col + 1] === "/") {
+							singleIdx = col;
+							break;
+						}
+						if (text[col] === "/" && text[col + 1] === "*") {
+							blockIdx = col;
+							break;
+						}
+					}
+
+					if (singleIdx !== -1) {
+						isCommentLine = true;
+						const match = text.slice(singleIdx).match(/^\/\/\/?\s*/);
+						const prefixLen = match ? match[0].length : 2;
+						commentOffset = singleIdx + prefixLen;
+						commentContent = text.slice(commentOffset);
+					} else if (blockIdx !== -1) {
+						isCommentLine = true;
+						const match = text.slice(blockIdx).match(/^\/\*+\s*/);
+						const prefixLen = match ? match[0].length : 2;
+						commentOffset = blockIdx + prefixLen;
+						commentContent = text.slice(commentOffset);
+						inBlockComment = true;
+
+						if (commentContent.includes("*/")) {
+							inBlockComment = false;
+							commentContent = commentContent.substring(0, commentContent.indexOf("*/"));
 						}
 					}
 				}
@@ -397,12 +454,12 @@ function activate(context) {
 			commentBlocks.push(currentBlock);
 		}
 
-		// --- STEP 2: 独立解析各个注释块（块间状态互不干扰） ---
+		// --- STEP 2: 独立解析每个注释块 ---
 		for (const block of commentBlocks) {
 			const protectedLines = new Set();
 			const multilineMathLines = new Set();
 
-			// --- Pass 2.1: 块级状态扫描 (代码块 ``` 与 多行公式 $$) ---
+			// --- Pass 2.1: 代码块与多行公式状态分析 ---
 			let inFencedCode = false;
 			let inDisplayMath = false;
 
@@ -466,13 +523,13 @@ function activate(context) {
 						}
 						mathBuffer = [];
 					} else {
-						// 绝对不剥离原字符，直接原样推入
+						// 多行公式原样推入内容，不做剥离
 						mathBuffer.push(item.content);
 					}
 					continue;
 				}
 
-				// 3) 检查开启代码块 ```
+				// 3) 检查开启代码块
 				if (cleanText.startsWith("```")) {
 					inFencedCode = true;
 					protectedLines.add(lineIdx);
@@ -482,7 +539,7 @@ function activate(context) {
 					continue;
 				}
 
-				// 4) 检查开启多行公式 $$ (仅当核心文本为 $$ 时开启)
+				// 4) 检查开启多行公式
 				if (cleanText === "$$") {
 					inDisplayMath = true;
 					multilineMathLines.add(lineIdx);
@@ -493,7 +550,7 @@ function activate(context) {
 				}
 			}
 
-			// --- Pass 2.2: 嵌套块语法与行内递归 AST 解析 ---
+			// --- Pass 2.2: 嵌套块语法与 AST 解析 ---
 			for (let k = 0; k < block.length; k++) {
 				const item = block[k];
 				const i = item.lineIndex;
@@ -505,18 +562,17 @@ function activate(context) {
 
 				if (!remText) continue;
 
-				// A. 嵌套块语法提取 (例如: > > - # )
 				let isHR = false;
 				while (remText.length > 0) {
 					if (/^\s*\\([>#\-*+]|==)/.test(remText)) {
 						break;
 					}
 
-					// 1) 分割线
+					// 1) 分割线（HR）渲染：挂载 hrDecoration 并隐藏原文
 					if (/^\s*(---|[*]{3}|___)\s*$/.test(remText)) {
 						if (!isCurrentLine) {
-							hrRanges.push(new vscode.Range(i, item.offset, i, doc.lineAt(i).text.length));
-							hideSyntaxRanges.push(new vscode.Range(i, item.offset, i, doc.lineAt(i).text.length));
+							hrRanges.push(new vscode.Range(i, curCol, i, curCol));
+							hideSyntaxRanges.push(new vscode.Range(i, curCol, i, doc.lineAt(i).text.length));
 						}
 						isHR = true;
 						break;
@@ -528,7 +584,6 @@ function activate(context) {
 						const prefixLen = qMatch[1].length;
 						if (!isCurrentLine) {
 							hideSyntaxRanges.push(new vscode.Range(i, curCol, i, curCol + prefixLen));
-							// 将竖线的渲染挂载点放在隐藏符号之后，保证多层嵌套时的物理渲染顺序正确
 							quoteRanges.push(new vscode.Range(i, curCol + prefixLen, i, item.offset + item.content.length));
 						}
 						curCol += prefixLen;
@@ -536,7 +591,7 @@ function activate(context) {
 						continue;
 					}
 
-					// 3) 列表 (- , * , + , 1. ) -> 包括 JSDoc 每行的 * 号
+					// 3) 列表 (- , * , + , 1. )
 					const lMatch = remText.match(/^(\s*([-*+]|\d+\.)\s+)/);
 					if (lMatch) {
 						const prefixLen = lMatch[1].length;
@@ -583,13 +638,13 @@ function activate(context) {
 
 				if (isHR || !remText) continue;
 
-				// B. 行内递归 AST 解析器
+				// 行内递归 AST 解析器
 				function parseInline(contentStr, startCol, currentStyles) {
 					if (!contentStr) return;
 
 					const candidates = [];
 
-					// 0) 转义字符解析 (\*, \~, \-, \`, \$, \#, \> 等)
+					// 转义字符 (\*, \~, \`, \$, \#, \> 等)
 					const escapeRegex = /\\([*~`$\-\\>#_()\[\]{}])/;
 					const em = escapeRegex.exec(contentStr);
 					if (em) {
@@ -601,7 +656,7 @@ function activate(context) {
 						});
 					}
 
-					// 1) 行内公式
+					// 行内公式
 					if (texToSvg) {
 						const mathRegex = /(?<!\\)(\$\$|\$)(.+?)(?<!\\)\1/;
 						const mm = mathRegex.exec(contentStr);
@@ -615,7 +670,7 @@ function activate(context) {
 						}
 					}
 
-					// 2) 行内代码
+					// 行内代码
 					const codeRegex = /(?<!\\)(`+)(.+?)(?<!\\)\1/;
 					const cm = codeRegex.exec(contentStr);
 					if (cm) {
@@ -628,7 +683,7 @@ function activate(context) {
 						});
 					}
 
-					// 3) 粗体斜体删除线
+					// 粗体斜体删除线
 					const boldItalicRegex = /(?<!\\)\*{3}([\s\S]+?)(?<!\\)\*{3}/;
 					const bim = boldItalicRegex.exec(contentStr);
 					if (bim) {
@@ -683,7 +738,6 @@ function activate(context) {
 						return;
 					}
 
-					// 最左竞争优先
 					candidates.sort((a, b) => a.index - b.index);
 					const best = candidates[0];
 

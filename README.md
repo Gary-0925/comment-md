@@ -1,12 +1,18 @@
-# Markdown in Comments
+<p style="text-align: center;">
+	<img src="./icon.png" alt="icon" style="height: 100px; width: 100px;"></img>
+</p>
+
+<h1 style="text-align: center;">Markdown in Comments</h1>
+
+[![latest version](https://img.shields.io/github/v/release/Gary-0925/comment-md?sort=date&style=flat-square&label=latest%20version&color=%23aa99dd)](https://github.com/Gary-0925/comment-md/releases/latest)[![latest version](https://img.shields.io/github/release-date/Gary-0925/comment-md?style=flat-square&label=%20&color=%23aa99dd)](https://github.com/Gary-0925/comment-md/releases/latest)
+[![latest update](https://img.shields.io/github/last-commit/Gary-0925/comment-md?style=flat-square&label=latest%20update)](https://github.com/Gary-0925/comment-md/commit/main)
+[![license](https://img.shields.io/github/license/Gary-0925/comment-md.svg?style=flat-square)](https://github.com/Gary-0925/comment-md/blob/main/LICENSE)
 
 ## 简介
 
-这个 VScode 插件可以在代码注释中渲染 Markdown 和 LaTeX/KaTeX。
+这个 VScode 插件可以在代码注释中渲染 Markdown 和 LaTeX。
 
-目前支持 C++、C、C#、Python、Java、Rust、Go、JS、PHP、TS、Kotlin、Swift 等编程语言
-
-可以在设置中调整对每种语言是否启用。
+目前支持 C++、C、C#、Python、Java、Rust、Go、JS、PHP、TS、Kotlin、Swift 等编程语言，可以在设置中调整对每种语言是否启用。
 
 由 Gemini-3.6-flash 辅助编写，目前 Bug 比较多，正在持续开发中。
 
