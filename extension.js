@@ -114,12 +114,10 @@ function getCommentColor() {
 
 	const themeCommentColors = {
 		"dark modern": "#6a9955",
-		"default dark+": "#6a9955",
-		"default dark": "#6a9955",
+		"dark+": "#6a9955",
 		"visual studio dark": "#6a9955",
 		"light modern+": "#008000",
-		"default light+": "#008000",
-		"default light": "#008000",
+		"light+": "#008000",
 		"visual studio light": "#008000",
 		"one dark pro": "#7f848e",
 		"one dark": "#5c6370",

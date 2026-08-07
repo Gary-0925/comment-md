@@ -2,7 +2,7 @@
 	<img src="./icon.png" alt="icon" height="100px" width="100px"></img>
 </p>
 
-<h1 align="center">Markdown in Comments</h1>
+<h1 align="center">Markdown and LaTeX in Comments</h1>
 
 [![latest version](https://img.shields.io/github/v/release/Gary-0925/md-in-comment?sort=date&style=flat-square&label=latest%20version&color=%23aa99dd)](https://github.com/Gary-0925/md-in-comment/releases/latest)[![latest version](https://img.shields.io/github/release-date/Gary-0925/md-in-comment?style=flat-square&label=%20&color=%23aa99dd)](https://github.com/Gary-0925/md-in-comment/releases/latest)
 [![latest update](https://img.shields.io/github/last-commit/Gary-0925/md-in-comment?style=flat-square&label=latest%20update)](https://github.com/Gary-0925/md-in-comment/commit/main)
@@ -10,13 +10,15 @@
 
 ## 简介
 
-这个 VScode 插件可以在代码注释中渲染 Markdown 和 LaTeX，支持部分 Markdown 语法和多行公式。
+这个 VScode 插件可以在代码注释中渲染 Markdown 和 $\LaTeX$，支持部分 Markdown 语法和多行公式。
 
 目前支持 C++、C、C#、Python、Java、Rust、Go、JS、PHP、TS、Kotlin、Swift 等编程语言，可以在设置中调整对每种语言是否启用。
 
 由 Gemini-3.6-flash 辅助编写，目前 Bug 比较多，正在持续开发中。
 
 **这个插件不是 Markdown 编辑器，它的目的是营造更美观的注释，而不是把注释变成 Markdown 编辑器。**
+
+插件会自动识别当前主题注释颜色，**如识别有误，可在设置中搜索 `md-in-comment.mathColor` 手动更改**。
 
 ## 示例
 
