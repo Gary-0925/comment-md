@@ -594,8 +594,8 @@ function activate(context) {
 						const isUnordered = /^[-*+]$/.test(markerText);
 
 						if (!isCurrentLine) {
-							hideSyntaxRanges.push(new vscode.Range(i, curCol, i, curCol + prefixLen));
 							if (isUnordered) {
+								hideSyntaxRanges.push(new vscode.Range(i, curCol, i, curCol + prefixLen));
 								listBulletRanges.push(new vscode.Range(i, curCol + prefixLen, i, curCol + prefixLen));
 							} else {
 								boldRanges.push(new vscode.Range(i, curCol, i, curCol + markerText.length));
