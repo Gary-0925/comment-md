@@ -2,10 +2,10 @@
 	"name": "comment-md",
 	"displayName": "Markdown in Comments",
 	"description": "在代码注释中渲染 Markdown & LaTeX",
-	"version": "1.6.0",
+	"version": "1.6.1",
 	"publisher": "Gary0",
 	"engines": {
-		"vscode": "^1.60.0"
+		"vscode": "^1.27.0"
 	},
 	"categories": ["Programming Languages", "Other"],
 	"main": "./dist/extension.js",
@@ -82,5 +82,14 @@
 	},
 	"devDependencies": {
 		"esbuild": "^0.20.0"
-	}
+	},
+	"license": "GNU General Public License v3.0",
+	"bugs": {
+		"url": "https://github.com/Gary-0925/comment-md/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Gary-0925/comment-md"
+	},
+	"homepage": "https://github.com/Gary-0925/comment-md/blob/main/README.md"
 }
