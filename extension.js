@@ -27,30 +27,45 @@ try {
 			svgStr = svgStr.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
 		}
 
-		let ratio = 1.0;
+		let wEm = 1.0;
+		let hEm = 1.0;
+
+		// 1. 解析 viewBox 还原 MathJax 真实尺寸 (1em = 1000 单位)
 		const vbMatch = svgStr.match(/viewBox=["']([^"']+)["']/);
 		if (vbMatch) {
 			const parts = vbMatch[1].trim().split(/\s+/).map(Number);
 			if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
-				ratio = parts[2] / parts[3];
+				const vbW = parts[2];
+				const vbH = parts[3];
+
+				// 还原自然比例
+				wEm = vbW / 1000;
+				hEm = vbH / 1000;
 			}
 		}
 
-		let va = "-0.2ex";
+		if (isMultiLine) {
+			hEm = Number((lineCount * 1.25).toFixed(2));
+			wEm = Number((hEm * (wEm > 0 ? wEm / hEm : 1)).toFixed(2));
+			va = "top";
+		} else {
+			const MAX_INLINE_LINE_HEIGHT = 1.05;
+			hEm = Math.min(hEm, MAX_INLINE_LINE_HEIGHT);
+
+			if (wEm > 0 && hEm > 0) {
+				const ratio = wEm / hEm;
+				wEm = hEm * (wEm / hEm);
+			}
+			wEm = Number(wEm.toFixed(3));
+			hEm = Number(hEm.toFixed(3));
+		}
+
+		let va = "0ex";
 		const vaMatch = svgStr.match(/vertical-align:\s*([^;"]+)/);
 		if (vaMatch) {
 			va = vaMatch[1];
 		}
-
-		let hEm, wEm;
-		if (isMultiLine) {
-			hEm = Number((lineCount * 1.25).toFixed(2));
-			wEm = Number((hEm * ratio).toFixed(2));
-			va = "top";
-		} else {
-			hEm = 0.9;
-			wEm = Number((hEm * ratio).toFixed(2));
-		}
+		if (isMultiLine) va = "top";
 
 		svgStr = svgStr.replace(/<svg[^>]*>/, (match) => {
 			let clean = match.replace(/\s*(width|height|style)=["'][^"']*["']/g, "");

@@ -2,7 +2,7 @@
 	"name": "comment-md",
 	"displayName": "Markdown in Comments",
 	"description": "在代码注释中渲染 Markdown & LaTeX",
-	"version": "1.6.3",
+	"version": "1.6.4",
 	"publisher": "Gary0",
 	"engines": {
 		"vscode": "^1.27.0"
