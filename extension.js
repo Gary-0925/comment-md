@@ -44,16 +44,30 @@ try {
 		}
 
 		let va = "0ex";
+		let margin = undefined;
+
 		if (isMultiLine) {
-			hEm = Number((lineCount * 1.25).toFixed(2));
-			wEm = Number((hEm * (wEm > 0 ? wEm / hEm : 1)).toFixed(2));
+			const naturalW = wEm;
+			const naturalH = hEm;
+			const EDITOR_LINE_HEIGHT = 1.35; // VS Code 编辑器单行平均高度 (em)
+			const totalBlockHeight = lineCount * EDITOR_LINE_HEIGHT;
+
+			wEm = Number(naturalW.toFixed(3));
+			hEm = Number(naturalH.toFixed(3));
+
+			// 【核心修复】计算垂直居中 Top Margin 偏移量，使多行公式在多行注释的上下正中间对齐
+			const topMargin = Math.max(0, (totalBlockHeight - naturalH) / 2);
+			margin = `${topMargin.toFixed(3)}em 0 0 0`;
 			va = "top";
 		} else {
 			const MAX_INLINE_LINE_HEIGHT = 1.05;
-			hEm = Math.min(hEm, MAX_INLINE_LINE_HEIGHT);
+			const naturalW = wEm;
+			const naturalH = hEm;
 
-			if (wEm > 0 && hEm > 0) {
-				wEm = hEm * (wEm / hEm);
+			hEm = Math.min(naturalH, MAX_INLINE_LINE_HEIGHT);
+
+			if (naturalW > 0 && naturalH > 0) {
+				wEm = hEm * (naturalW / naturalH);
 			}
 			wEm = Number(wEm.toFixed(3));
 			hEm = Number(hEm.toFixed(3));
@@ -72,7 +86,7 @@ try {
 		const base64 = Buffer.from(svgStr).toString("base64");
 		const uri = "data:image/svg+xml;base64," + base64;
 
-		return { uri, wEm, hEm, va };
+		return { uri, wEm, hEm, va, margin };
 	};
 } catch (e) {
 	console.error("[md-in-comment] MathJax 引擎加载失败:", e);
@@ -507,6 +521,7 @@ function activate(context) {
 											width: `${res.wEm}em`,
 											height: `${res.hEm}em`,
 											verticalAlign: res.va,
+											margin: res.margin, // 将计算好的 Top Margin 传入伪元素
 										},
 									},
 								});
@@ -516,7 +531,6 @@ function activate(context) {
 						}
 						mathBuffer = [];
 					} else {
-						// 多行公式原样推入内容，不做剥离
 						mathBuffer.push(item.content);
 					}
 					continue;
@@ -561,7 +575,7 @@ function activate(context) {
 						break;
 					}
 
-					// 1) 分割线（HR）渲染：挂载 hrDecoration 并隐藏原文
+					// 1) 分割线（HR）
 					if (/^\s*(---|[*]{3}|___)\s*$/.test(remText)) {
 						if (!isCurrentLine) {
 							hrRanges.push(new vscode.Range(i, curCol, i, curCol));
@@ -596,7 +610,8 @@ function activate(context) {
 								hideSyntaxRanges.push(new vscode.Range(i, curCol, i, curCol + prefixLen));
 								listBulletRanges.push(new vscode.Range(i, curCol + prefixLen, i, curCol + prefixLen));
 							} else {
-								boldRanges.push(new vscode.Range(i, curCol, i, curCol + markerText.length));
+								const markerStart = curCol + lMatch[1].indexOf(markerText);
+								boldRanges.push(new vscode.Range(i, markerStart, i, markerStart + markerText.length));
 							}
 						}
 						curCol += prefixLen;
@@ -637,7 +652,7 @@ function activate(context) {
 
 					const candidates = [];
 
-					// 转义字符 (\*, \~, \`, \$, \#, \> 等)
+					// 转义字符
 					const escapeRegex = /\\([*~`$\-\\>#_()\[\]{}])/;
 					const em = escapeRegex.exec(contentStr);
 					if (em) {
